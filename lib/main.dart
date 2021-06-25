@@ -18,6 +18,7 @@ import 'dart:math' as math;
 import 'package:clipboard/clipboard.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:photo_view/photo_view.dart';
+import 'package:image/image.dart' as imgLib;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -137,26 +138,36 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       url = fullPath;
     }
     print('got download url' + url);
-    setState(() {
-      _image = Image.network(url,
-        fit: BoxFit.contain,
-        loadingBuilder: (BuildContext context, Widget child,
-            ImageChunkEvent? loadingProgress) {
-          if (loadingProgress == null) {
-            return child;
-          }
-          return Center(
-            child: CircularProgressIndicator(
-              backgroundColor: Colors.pinkAccent.withOpacity(0.5),
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                  loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
-          );
-        },
-      );
-    });
+
+      if (url.contains('.tif')) {
+        print('tiff image');
+        final response = await http.get(Uri.parse( url ) );
+        imgLib.Decoder dec = imgLib.findDecoderForData(response.bodyBytes)!;
+        print(dec);
+        _image = Image.memory(Uint8List.fromList( imgLib.encodePng( dec.decodeImage(response.bodyBytes)! ) ) );
+      }else{
+        _image = Image.network(url,
+          fit: BoxFit.contain,
+          loadingBuilder: (BuildContext context, Widget child,
+              ImageChunkEvent? loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return Center(
+              child: CircularProgressIndicator(
+                backgroundColor: Colors.pinkAccent.withOpacity(0.5),
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                    loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+        );
+      }
+      setState(() {
+
+      });
     _image.image.resolve(ImageConfiguration()).addListener(
       ImageStreamListener(
             (info, call) {
@@ -211,6 +222,45 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           }),
     });
   }
+  late Image a;
+  late Image b;
+  late Image c;
+  late Image d;
+  late Image e;
+  late Image f;
+  bool tiled = false;
+
+  startTiled() async {
+
+    var listRef = storage.ref().child('/dermpathinpractice/' + chapterTitle);
+    listRef
+        .listAll()
+        .then((res) => {
+          res.items.forEach((element) async {
+            if (element.fullPath.contains('full')) {
+              initImage(element.fullPath);
+            }else{
+              if (element.fullPath.contains('00')){
+                a = Image.network( await element.getDownloadURL() );
+              }else if (element.fullPath.contains('01')) {
+                b = Image.network( await element.getDownloadURL() );
+              }else if (element.fullPath.contains('10')) {
+                c = Image.network( await element.getDownloadURL() );
+              }else if (element.fullPath.contains('11')) {
+                d = Image.network( await element.getDownloadURL() );
+              }else if (element.fullPath.contains('20')) {
+                e = Image.network( await element.getDownloadURL() );
+              }else if (element.fullPath.contains('21')) {
+                f = Image.network( await element.getDownloadURL() );
+              }
+            }
+
+    }),
+
+
+    });
+
+  }
 
   bool startingUp = true;
   updateDrawer() {
@@ -230,10 +280,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           title: Text(itemRef.name),
           onTap: () =>
           {
+            print('tapped'),
             setState(() =>
             {
               chapterTitle = itemRef.name,
-              changeChapter(),
+              if (chapterTitle.contains('Tiled') ) {
+                tiled = true,
+                startTiled(),
+              }else{
+                tiled = false,
+                print('turning off tiled'),
+                changeChapter(),
+              },
+
               _loading = true,
             }),
             Navigator.pop(context),
@@ -247,7 +306,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           onTap: () =>
           {
             setState(() =>
-            {
+            { tiled = false,
+              print('turning off tiled'),
               initImage(itemRef.fullPath),
               _loading = true,
             }),
@@ -396,7 +456,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                     panEnabled: true, // Set it to false to prevent panning.
                     boundaryMargin: EdgeInsets.all(80),
                     minScale: 0.5,
-                    maxScale: 10,
+                    maxScale: 20,
                     constrained: true,
                     clipBehavior: Clip.hardEdge,
                     transformationController: _transformationController,
@@ -404,7 +464,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                       if (_transformationController.value[0] > 2) {
 
                         if (!zoomed) {
-                          print('zoomed');
+                          print('zoomed' + tiled.toString());
                           zoomed = true;
                           build(() {});
                         }
@@ -421,65 +481,39 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                       child: Stack(
                         children: [
                           Container(
-
-                            width: 1000,
-                            child: FittedBox(child: _image),
                             height: 1000,
+                            width: 1000,
+                            child: FittedBox(child: Stack(
+                              children: [
+                                !zoomed ?
+
+                                _image :
+                                tiled ? Row(
+                                  children: [
+                                    Column(
+                                      children: [
+                                        a, b
+                                      ],
+                                    ),
+                                    Column(
+                                      children: [
+                                        c , d
+                                      ],
+                                    ),
+                                    Column(
+                                      children: [
+                                        e , f
+                                      ],
+                                    ),
+                                  ],
+                                ) : _image,
+                              ]
+
+                            )),
+
                           ),
 
-                          // zoomed ? Row(
-                          //   children: [
-                          //     Column(
-                          //       children: [
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //       ],
-                          //     ),
-                          //     Column(
-                          //       children: [
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //       ],
-                          //     ),
-                          //     Column(
-                          //       children: [
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //       ],
-                          //     ),
-                          //     Column(
-                          //       children: [
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.blue.withOpacity(0.5), width: 250, height: 250, child: Text('zoomed in tile'),),
-                          //       ],
-                          //     ),
-                          //
-                          //
-                          //   ],
-                          // ) : Row(
-                          //   children: [
-                          //     Column(
-                          //       children: [
-                          //         Container(alignment: Alignment.center, color: Colors.red.withOpacity(0.5), width: 500, height: 500, child: Text('zoomed out tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.red.withOpacity(0.5), width: 500, height: 500, child: Text('zoomed out tile'),),
-                          //       ],
-                          //     ),
-                          //     Column(
-                          //       children: [
-                          //         Container(alignment: Alignment.center, color: Colors.red.withOpacity(0.5), width: 500, height: 500, child: Text('zoomed out tile'),),
-                          //         Container(alignment: Alignment.center, color: Colors.red.withOpacity(0.5), width: 500, height: 500, child: Text('zoomed out tile'),),
-                          //       ],
-                          //     ),
-                          //   ],
-                          // ),
+
                           Positioned(
                               left: 600,
                               top: 600,
@@ -551,8 +585,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             Expanded(
                 child: Container()
             ),
+            Text(tiled ? zoomed ? 'high quality' : 'low quality' : 'n/a' ),
             FloatingActionButton(
-              onPressed: () => {_animateResetInitialize()},
+              onPressed: () => {
+                zoomed = !zoomed,
+                setState(() {})
+//                _animateResetInitialize()
+              },
+              tooltip: 'Toggle Quality',
+              child: Icon(Icons.high_quality),
+            ),
+            FloatingActionButton(
+              onPressed: () => {
+                _animateResetInitialize()
+              },
               tooltip: 'Reset Zoom',
               child: Icon(Icons.fullscreen),
             ),
