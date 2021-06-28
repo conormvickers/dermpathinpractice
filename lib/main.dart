@@ -517,7 +517,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                           Positioned(
                               left: 600,
                               top: 600,
-                              child: Container(width: 50, height: 50, decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 3)),))
+                              child: GestureDetector(
+                                onTapUp: (detail) {
+                                  print(detail.globalPosition);
+                                  setupMag(detail.globalPosition);
+                                },
+                                  child: Container(
+                                    child: Text('click me'),
+                                    width: 50, height: 50, decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 3)),))),
+
                         ],
                       ),
                     ),
@@ -528,9 +536,46 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             _loading ? loadingWidget : Container(),
           ],
         );
+  }
 
+  Widget mag = Container();
+  bool magUp = false;
+  setupMag(Offset tap) {
+    mag = Stack(
+      children: [
+    Row(
+            children: [Expanded(
+              child: GestureDetector(
+                child: Container(
+                  color: Colors.black38,
+                ),
+                onTap: () {
+                  if (magUp) {
+                    print('dismissing mag');
+                    setState(() {mag = Container();});}
+                  magUp = false;
+                  }
 
+              ),
+            )],
+          ),
+        Positioned(
+          top: tap.dy - 260,
+          left: tap.dx,
+          child: Container(
+            width: 200,
+            height: 200,
+            color: Colors.orange,
+            child: Text("I'm a zoomed in image"),
+          ),
+        ),
 
+      ],
+    );
+    setState(() {
+
+    });
+    magUp = true;
   }
 
   Widget rowOrColumn() {
@@ -575,7 +620,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             ...drawerItems],
         ),
       ),
-      body: rowOrColumn(),
+      body: Stack(
+        children: [
+          rowOrColumn(),
+
+          mag
+        ],
+      ),
 
         floatingActionButton: Row(
           mainAxisAlignment: MainAxisAlignment.end,
