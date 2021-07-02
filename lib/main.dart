@@ -19,6 +19,8 @@ import 'package:clipboard/clipboard.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:photo_view/photo_view.dart';
 import 'package:image/image.dart' as imgLib;
+import 'package:community_material_icon/community_material_icon.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -132,7 +134,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     await Firebase.initializeApp();
     updateDrawer();
   }
+  String currentImagePath = '';
+  String pictureName = '';
   initImage(String fullPath, [bool firebase = true]) async {
+    currentImagePath = fullPath;
+    if (currentImagePath.contains('/') && currentImagePath.contains('.')) {
+      pictureName = currentImagePath.substring( currentImagePath.lastIndexOf('/') + 1, currentImagePath.lastIndexOf('.') );
+    }
     if (firebase) {
       ref = storage.ref('/').child(fullPath);
       print(fullPath);
@@ -195,29 +203,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
   updateInfo(firebase_storage.Reference itemRef) async {
     print('downloading text data' + itemRef.fullPath);
-    final a = await itemRef.getDownloadURL();
-    final b = await http.get(Uri.parse(a) );
+    final Uint8List? a = await itemRef.getData();
+    reading = utf8.decode(a!);
 
-    print(b);
-    rawInfo = String.fromCharCodes(b.bodyBytes);
-    reading = rawInfo;
     setState(() {
 
     });
   }
 
 
-  List<Widget> drawerItems = [
-  ];
+  List<Widget> drawerItems = [];
+  List<String> chapterImages = [];
 
   changeChapter () {
-    var listRef = storage.ref().child('/dermpathinpractice/' + chapterTitle);
+    var listRef = storage.ref().child('/' + chapterTitle);
+    bool firstImage = false;
     listRef
         .listAll()
         .then((res) => {
           res.items.forEach((element) {
             if (element.fullPath.endsWith('.jpg') || element.fullPath.endsWith('.jpeg') ) {
-              initImage(element.fullPath);
+              if (!firstImage) {
+                initImage(element.fullPath);
+                firstImage = true;
+              }
+              chapterImages.add(element.fullPath);
             }
             if (element.fullPath.endsWith('.txt') ) {
               updateInfo(element);
@@ -266,8 +276,52 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
 
   bool startingUp = true;
+  late Widget creditTile = ListTile(
+    onTap: openEndDrawer,
+    title: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('About'),
+        Icon(Icons.info_rounded, color: Colors.deepPurple,)
+      ],
+    ),
+  );
+  late Widget creditWidget = Container(
+    child: Column(
+      children: [
+        DrawerHeader(child: FittedBox(
+            child: Text('Contributors / Masterminds', style: GoogleFonts.montserrat(),))),
+        Card(
+          elevation: 10,
+          child: Column(
+            children: [
+
+              Container(
+                  padding: EdgeInsets.all(10),
+                  child: Text('Jason Lee, MD')),
+            ],
+          ),
+        ),
+        Card(
+          elevation: 10,
+          child: Container(
+              padding: EdgeInsets.all(10),
+              child: Text('Conor Vickers, MD, BSE')),
+        ),
+        Card(
+          elevation: 10,
+          child: Container(
+              padding: EdgeInsets.all(10),
+              child: Text('Simo Huang, MD')),
+        ),
+      ],
+    ),
+  );
+  openEndDrawer() {
+    scafKey.currentState!.openEndDrawer();
+  }
   updateDrawer() {
-    var listRef = storage.ref().child('/dermpathinpractice/');
+    var listRef = storage.ref().child('/');
     String first = '';
     listRef
         .listAll()
@@ -328,9 +382,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             _loading = true;
           }
         }),
-      }
+      },
+    drawerItems.add(creditTile),
     })
         .onError((error, stackTrace) => {});
+
   }
   IconData infoIcon = Icons.info;
   String currentCase = "";
@@ -387,38 +443,62 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     html.window.open(url, 'PlaceholderName');
   }
 
-  
+  goToMarker(String where) {
+    List<String> whereSplit = where.split(',');
+    print(whereSplit);
+    String targetImageName = whereSplit[0];
+    targetImageName = targetImageName.replaceAll('_', ' ');
+    double zoom = double.parse(whereSplit[1]) ;
+    double x = double.parse( whereSplit[2] );
+    double y = double.parse( whereSplit[3]) ;
+    String targetImageFullPath = '';
+    chapterImages.asMap().forEach((key, value) {
+      print(value + ' | ' + targetImageName);
+      if (value.toUpperCase().contains(targetImageName.toUpperCase())){
+        targetImageFullPath = value;
+      }
+    });
+
+
+    initImage( targetImageFullPath );
+
+
+    print(viewerKey.currentContext!.size);
+    double w = viewerKey.currentContext!.size!.width;
+    double h = viewerKey.currentContext!.size!.height;
+    double min = 0;
+    if (w > h) {
+      min = w;
+    }else{
+      min = h;
+    }
+    animateTo(
+        Matrix4.fromList([zoom, 0, 0, 0,
+          0, zoom, 0, 0,
+          0, 0, zoom, 0,
+          -zoom * x * ( min )  ,
+          -zoom * y * ( min ) , 0, 1])
+    );
+  }
+
   Widget textScreen() {
     List<String> markerSplit = reading.split('see marker ' );
     List<TextSpan> textBits = [];
     markerSplit.asMap().forEach((key, value) {
       if (key > 0) {
-        value = value.replaceRange(0, 1, '');
+        value = value.replaceRange(0, value.indexOf(' ') + 1, '');
       }
-      textBits.add(TextSpan(text: value , style: TextStyle(color: Colors.black)));
+      textBits.add(TextSpan(text: value , style: GoogleFonts.montserrat()));
 
       if (key < markerSplit.length - 1) {
-        String a = markerSplit[key = 1].substring(0,1);
-        textBits.add(TextSpan(text: 'see marker ' + a,
+        String where = markerSplit[key + 1].substring(0, markerSplit[key + 1].indexOf(' '));
+
+
+        textBits.add(TextSpan(text: 'see marker' ,
             style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold), recognizer: TapGestureRecognizer()
           ..onTap = () {
-            print('clicked ' + a);
-            print(viewerKey.currentContext!.size);
-            double w = viewerKey.currentContext!.size!.width;
-            double h = viewerKey.currentContext!.size!.height;
-            double min = 0;
-            if (w > h) {
-              min = w;
-            }else{
-              min = h;
-            }
-            animateTo(
-              Matrix4.fromList([4, 0, 0, 0,
-                0, 4, 0, 0,
-                0, 0, 4, 0,
-                -4 * 0.5 * ( min )  ,
-                -4 * 0.5 * ( min ) , 0, 1])
-            );
+            print('clicked ' + where);
+            goToMarker(where);
 
           }),
         );
@@ -445,7 +525,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   Widget viewer() {
     return Stack(
           children: [
-
             StatefulBuilder(
       builder: (BuildContext context, StateSetter build) =>
               Center(
@@ -537,6 +616,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
               ),
     ),
             _loading ? loadingWidget : Container(),
+            Padding(
+              padding: EdgeInsets.all(10),
+              child: Container(
+                alignment: Alignment.topRight,
+                child: Container(
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      color: Colors.pinkAccent
+                    ),
+                    child: Text(pictureName , style: TextStyle(color: Colors.white),)),
+              ),
+            )
           ],
         );
   }
@@ -584,6 +676,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     );
   }
 
+  nextImage() {
+    if (chapterImages.contains(currentImagePath)) {
+      if (chapterImages.indexOf(currentImagePath) + 1 < chapterImages.length) {
+        initImage(chapterImages[ chapterImages.indexOf(currentImagePath) + 1 ] );
+      }
+    }
+  }
+
+  previousImage() {
+    if (chapterImages.contains(currentImagePath)) {
+      if (chapterImages.indexOf(currentImagePath) - 1 >= 0) {
+        initImage(chapterImages[ chapterImages.indexOf(currentImagePath) - 1 ] );
+      }
+    }
+  }
+
   GlobalKey<ScaffoldState> scafKey = GlobalKey<ScaffoldState>();
   @override
   Widget build(BuildContext context) {
@@ -596,9 +704,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           tooltip: 'Chapters',
           onPressed: () => { scafKey.currentState!.openDrawer() },
         ),
+        actions: [
+          Container()
+        ],
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+        Icon(CommunityMaterialIcons.bacteria_outline),
+            Container(width: 10,),
+            Text("Dermpath", style: GoogleFonts.montserrat(fontSize: 20),),
+            Text("  -in-  ", style: GoogleFonts.montserrat(fontSize: 10),),
+            Text("Practice", style: GoogleFonts.montserrat(fontSize: 20),),
+            Container(width: 10),
+            Icon(CommunityMaterialIcons.microscope),
+
+          ],
+        ),
       ),
       drawer: Drawer(
         child: ListView(
@@ -606,6 +729,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             DrawerHeader(child: Center(child: Text('Chapters', style: TextStyle(fontSize: 30),))),
             ...drawerItems],
         ),
+      ),
+      endDrawer: Drawer(
+        child: creditWidget,
       ),
       body: Stack(
         children: [
@@ -655,16 +781,32 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             Expanded(
                 child: Container()
             ),
-            Text(tiled ? zoomed ? 'high quality' : 'low quality' : 'n/a' ),
+            // Text(tiled ? zoomed ? 'high quality' : 'low quality' : 'n/a' ),
+//             FloatingActionButton(
+//               onPressed: () => {
+//                 zoomed = !zoomed,
+//                 setState(() {})
+// //                _animateResetInitialize()
+//               },
+//               tooltip: 'Toggle Quality',
+//               child: Icon(Icons.high_quality),
+//             ),
             FloatingActionButton(
               onPressed: () => {
-                zoomed = !zoomed,
-                setState(() {})
-//                _animateResetInitialize()
+                previousImage(),
               },
-              tooltip: 'Toggle Quality',
-              child: Icon(Icons.high_quality),
+              tooltip: "Previous Image",
+              child: Icon(Icons.arrow_left),
             ),
+            Container(width: 10),
+            FloatingActionButton(
+              onPressed: () => {
+                nextImage(),
+              },
+              tooltip: "Next Image",
+              child: Icon(Icons.arrow_right),
+            ),
+            Container(width: 10),
             FloatingActionButton(
               onPressed: () => {
                 _animateResetInitialize()
