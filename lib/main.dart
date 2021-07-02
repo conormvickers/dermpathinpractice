@@ -64,7 +64,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     slideController = TransformationController();
     _image = Image.memory(  kTransparentImage );
     _loading = false;
+
   }
+  double tapdy = 0;
+  double tapdx = 0;
 
   final TransformationController _transformationController =
   TransformationController();
@@ -523,7 +526,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                                   setupMag(detail.globalPosition);
                                 },
                                   child: Container(
-                                    child: Text('click me'),
+                                    child: Center(child: Text('click me')),
                                     width: 50, height: 50, decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 3)),))),
 
                         ],
@@ -541,42 +544,26 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   Widget mag = Container();
   bool magUp = false;
   setupMag(Offset tap) {
-    mag = Stack(
-      children: [
-    Row(
-            children: [Expanded(
-              child: GestureDetector(
-                child: Container(
-                  color: Colors.black38,
-                ),
-                onTap: () {
-                  if (magUp) {
-                    print('dismissing mag');
-                    setState(() {mag = Container();});}
-                  magUp = false;
-                  }
 
-              ),
-            )],
-          ),
-        Positioned(
-          top: tap.dy - 260,
-          left: tap.dx,
-          child: Container(
-            width: 200,
-            height: 200,
-            color: Colors.orange,
-            child: Text("I'm a zoomed in image"),
-          ),
-        ),
-
-      ],
-    );
     setState(() {
-
+      magUp = true;
     });
-    magUp = true;
+    setState(() {
+      tapdx = tap.dx;
+      tapdy = MediaQuery.of(context).size.height -  tap.dy;
+      magW = 200;
+      magH = 200;
+      magDecoration = BoxDecoration(
+          color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.black , width: 2)
+      );
+    });
+
   }
+  double magW = 0;
+  double magH = 0;
+  BoxDecoration magDecoration = BoxDecoration();
 
   Widget rowOrColumn() {
 
@@ -623,8 +610,40 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       body: Stack(
         children: [
           rowOrColumn(),
-
-          mag
+          Stack(
+            children: [
+              magUp ? Row(
+                children: [Expanded(
+                  child: GestureDetector(
+                      child: Container(
+                        color: Colors.black38,
+                      ),
+                      onTap: () {
+                        if (magUp) {
+                          magW = 0;
+                          magH = 0;
+                          magDecoration = BoxDecoration();
+                          print('dismissing mag');
+                          setState(() {});
+                        }
+                        magUp = false;
+                      }
+                  ),
+                )],
+              ) : Container(),
+              Positioned(
+                  bottom: tapdy ,
+                  left: tapdx,
+                  child: AnimatedContainer(
+                    width: magW,
+                    height: magH,
+                    decoration: magDecoration,
+                    duration: Duration(milliseconds: 300),
+                    child: Center(child: Text("I'm a zoomed in image")),
+                  ),
+              ),
+            ],
+          ) ,
         ],
       ),
 
