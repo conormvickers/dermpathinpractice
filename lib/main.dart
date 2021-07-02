@@ -306,7 +306,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           elevation: 10,
           child: Container(
               padding: EdgeInsets.all(10),
-              child: Text('Conor Vickers, MD, BSE')),
+              child: Text('Conor Vickers, MD')),
         ),
         Card(
           elevation: 10,
@@ -459,9 +459,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       }
     });
 
-
     initImage( targetImageFullPath );
-
 
     print(viewerKey.currentContext!.size);
     double w = viewerKey.currentContext!.size!.width;
@@ -472,6 +470,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     }else{
       min = h;
     }
+    setState(() {
+      markers.add(Positioned(child: Container(
+        width: 100,
+        height: 100,
+        color: Colors.transparent, child: FittedBox(child: Icon(CommunityMaterialIcons.arrow_bottom_right_thick , color: Colors.cyanAccent,)),) , top: 1000*y + 100 * (1 / zoom), left: 1000*x + 100 * (1 / zoom) ,) );
+    });
     animateTo(
         Matrix4.fromList([zoom, 0, 0, 0,
           0, zoom, 0, 0,
@@ -522,6 +526,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
 
   bool zoomed = false;
+  List<Widget> markers = [];
+
   Widget viewer() {
     return Stack(
           children: [
@@ -596,17 +602,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                           ),
 
 
-                          Positioned(
-                              left: 600,
-                              top: 600,
-                              child: GestureDetector(
-                                onTapUp: (detail) {
-                                  print(detail.globalPosition);
-                                  setupMag(detail.globalPosition);
-                                },
-                                  child: Container(
-                                    child: Center(child: Text('click me')),
-                                    width: 50, height: 50, decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 3)),))),
+                          ...markers,
 
                         ],
                       ),
@@ -699,6 +695,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     return Scaffold(
       key: scafKey,
       appBar: AppBar(
+        flexibleSpace: Container(
+            decoration: BoxDecoration(
+      gradient: LinearGradient(
+      begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Colors.deepPurple, Colors.pinkAccent]))),
         leading: IconButton(
           icon: Icon(Icons.menu_book_outlined,),
           tooltip: 'Chapters',
