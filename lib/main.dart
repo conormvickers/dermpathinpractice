@@ -19,7 +19,6 @@ import 'package:clipboard/clipboard.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:photo_view/photo_view.dart';
 import 'package:image/image.dart' as imgLib;
-import 'package:community_material_icon/community_material_icon.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
@@ -443,6 +442,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     html.window.open(url, 'PlaceholderName');
   }
 
+
+
   goToMarker(String where) {
     List<String> whereSplit = where.split(',');
     print(whereSplit);
@@ -474,7 +475,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       markers.add(Positioned(child: Container(
         width: 100,
         height: 100,
-        color: Colors.transparent, child: FittedBox(child: Icon(CommunityMaterialIcons.arrow_bottom_right_thick , color: Colors.cyanAccent,)),) , top: 1000*y + 100 * (1 / zoom), left: 1000*x + 100 * (1 / zoom) ,) );
+        color: Colors.transparent, child: FittedBox(child: Icon(Icons.arrow_right , color: Colors.cyanAccent,)),) ,
+        top: 1000*y + 200 * (1 / zoom), left: 1000*x + 100 * (1 / zoom) ,) );
     });
     animateTo(
         Matrix4.fromList([zoom, 0, 0, 0,
@@ -573,37 +575,34 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                             width: 1000,
                             child: FittedBox(child: Stack(
                               children: [
-                                !zoomed ?
-
-                                _image :
-                                tiled ? Row(
-                                  children: [
-                                    Column(
-                                      children: [
-                                        a, b
-                                      ],
-                                    ),
-                                    Column(
-                                      children: [
-                                        c , d
-                                      ],
-                                    ),
-                                    Column(
-                                      children: [
-                                        e , f
-                                      ],
-                                    ),
-                                  ],
-                                ) : _image,
+                                _image
+                                // !zoomed ?
+                                // _image :
+                                // tiled ? Row(
+                                //   children: [
+                                //     Column(
+                                //       children: [
+                                //         a, b
+                                //       ],
+                                //     ),
+                                //     Column(
+                                //       children: [
+                                //         c , d
+                                //       ],
+                                //     ),
+                                //     Column(
+                                //       children: [
+                                //         e , f
+                                //       ],
+                                //     ),
+                                //   ],
+                                // ) : _image,
                               ]
 
                             )),
 
                           ),
-
-
                           ...markers,
-
                         ],
                       ),
                     ),
@@ -714,14 +713,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-        Icon(CommunityMaterialIcons.bacteria_outline),
             Container(width: 10,),
             Text("Dermpath", style: GoogleFonts.montserrat(fontSize: 20),),
             Text("  -in-  ", style: GoogleFonts.montserrat(fontSize: 10),),
             Text("Practice", style: GoogleFonts.montserrat(fontSize: 20),),
             Container(width: 10),
-            Icon(CommunityMaterialIcons.microscope),
-
           ],
         ),
       ),
