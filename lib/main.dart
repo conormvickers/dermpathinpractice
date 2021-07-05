@@ -472,11 +472,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       min = h;
     }
     setState(() {
-      markers.add(Positioned(child: Container(
-        width: 100,
-        height: 100,
-        color: Colors.transparent, child: FittedBox(child: Icon(Icons.arrow_right , color: Colors.cyanAccent,)),) ,
-        top: 1000*y + 200 * (1 / zoom), left: 1000*x + 100 * (1 / zoom) ,) );
+      markers.add(Positioned(
+        child: Container(
+          width: 500 * (1 / zoom),
+          height: 500 * (1 / zoom),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.deepOrange, width: 1),
+            color: Colors.transparent,
+          ),
+
+        ) ,
+          top: 1000*y + 250 * (1 / zoom),
+        left: 1000*x + 250 * (1 / zoom) ,) );
     });
     animateTo(
         Matrix4.fromList([zoom, 0, 0, 0,
@@ -708,8 +715,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
         actions: [
           Container()
         ],
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
