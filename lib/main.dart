@@ -135,18 +135,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
   String currentImagePath = '';
   String pictureName = '';
-  initImage(String fullPath, [bool firebase = true]) async {
+  initImage(String fullPath) async {
     currentImagePath = fullPath;
+
     if (currentImagePath.contains('/') && currentImagePath.contains('.')) {
       pictureName = currentImagePath.substring( currentImagePath.lastIndexOf('/') + 1, currentImagePath.lastIndexOf('.') );
     }
-    if (firebase) {
-      ref = storage.ref('/').child(fullPath);
-      print(fullPath);
-      url = await ref.getDownloadURL();
-    }else{
-      url = fullPath;
-    }
+    print('looking on firebase for: ' + fullPath);
+    ref = storage.ref('/').child(fullPath);
+    print(fullPath);
+    url = await ref.getDownloadURL();
+
     print('got download url' + url);
 
       if (url.contains('.tif')) {
@@ -204,7 +203,29 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     print('downloading text data' + itemRef.fullPath);
     final Uint8List? a = await itemRef.getData();
     reading = utf8.decode(a!);
+    List<String> markerSplit = reading.split('see marker ' );
+    textBits = [];
+    markerSplit.asMap().forEach((key, value) {
+      if (key > 0) {
+        value = value.replaceRange(0, value.indexOf(' ') + 1, '');
+      }
+      textBits.add(TextSpan(text: value , style: GoogleFonts.montserrat()));
 
+      if (key < markerSplit.length - 1) {
+        String where = markerSplit[key + 1].substring(0, markerSplit[key + 1].indexOf(' '));
+
+
+        textBits.add(TextSpan(text: 'see marker' ,
+            style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold), recognizer: TapGestureRecognizer()
+              ..onTap = () {
+                print('clicked ' + where);
+                goToMarker(where);
+
+              }),
+        );
+        addMarker(where);
+      }
+    });
     setState(() {
 
     });
@@ -215,13 +236,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   List<String> chapterImages = [];
 
   changeChapter () {
+    markers = [];
+    fullListMarkers = [];
+    activeMarkerColorList = [];
     var listRef = storage.ref().child('/' + chapterTitle);
     bool firstImage = false;
     listRef
         .listAll()
         .then((res) => {
           res.items.forEach((element) {
-            if (element.fullPath.endsWith('.jpg') || element.fullPath.endsWith('.jpeg') ) {
+            if (element.fullPath.endsWith('.jpg') || element.fullPath.endsWith('.jpeg') || element.fullPath.endsWith('.png') ) {
               if (!firstImage) {
                 initImage(element.fullPath);
                 firstImage = true;
@@ -448,7 +472,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     List<String> whereSplit = where.split(',');
     print(whereSplit);
     String targetImageName = whereSplit[0];
-    targetImageName = targetImageName.replaceAll('_', ' ');
+
     double zoom = double.parse(whereSplit[1]) ;
     double x = double.parse( whereSplit[2] );
     double y = double.parse( whereSplit[3]) ;
@@ -472,18 +496,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       min = h;
     }
     setState(() {
-      markers.add(Positioned(
-        child: Container(
-          width: 500 * (1 / zoom),
-          height: 500 * (1 / zoom),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.deepOrange, width: 1),
-            color: Colors.transparent,
-          ),
-
-        ) ,
-          top: 1000*y + 250 * (1 / zoom),
-        left: 1000*x + 250 * (1 / zoom) ,) );
+      print('changing decoration at: ' +  fullListMarkers.indexOf(where).toString());
+      coolColor = Colors.blue;
+      activeMarkerColorList[ fullListMarkers.indexOf(where) ] = BoxDecoration(
+        color: Colors.transparent,
+        border: Border.all(color: Colors.orange, width: 1)
+      );
     });
     animateTo(
         Matrix4.fromList([zoom, 0, 0, 0,
@@ -493,51 +511,62 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           -zoom * y * ( min ) , 0, 1])
     );
   }
+  Color coolColor = Colors.red;
+  List<String> fullListMarkers = [];
+  List<BoxDecoration> activeMarkerColorList = [];
+  int addingMarkerIndex = 0;
+  List<StateSetter> markerStateSetList = [];
+  addMarker(String where) {
 
-  Widget textScreen() {
-    List<String> markerSplit = reading.split('see marker ' );
-    List<TextSpan> textBits = [];
-    markerSplit.asMap().forEach((key, value) {
-      if (key > 0) {
-        value = value.replaceRange(0, value.indexOf(' ') + 1, '');
-      }
-      textBits.add(TextSpan(text: value , style: GoogleFonts.montserrat()));
+    activeMarkerColorList.add(BoxDecoration());
+    fullListMarkers.add(where);
+    addingMarkerIndex++;
+  }
+  updateMarkers() {
+    markers = [];
+    fullListMarkers.forEach((where) {
+      List<String> whereSplit = where.split(',');
+      print(whereSplit);
+      double zoom = double.parse(whereSplit[1]) ;
+      double x = double.parse( whereSplit[2] );
+      double y = double.parse( whereSplit[3]) ;
+      markers.add(Positioned(
+        child: AnimatedContainer(
+            width: 500 * (1 / zoom),
+            height: 500 * (1 / zoom),
+            color: coolColor,
+            //decoration: activeMarkerColorList[rack],
+            duration: Duration(milliseconds: 300),
 
-      if (key < markerSplit.length - 1) {
-        String where = markerSplit[key + 1].substring(0, markerSplit[key + 1].indexOf(' '));
-
-
-        textBits.add(TextSpan(text: 'see marker' ,
-            style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold), recognizer: TapGestureRecognizer()
-          ..onTap = () {
-            print('clicked ' + where);
-            goToMarker(where);
-
-          }),
-        );
-      }
+          ) ,
+        top: 1000*y + 250 * (1 / zoom),
+        left: 1000*x + 250 * (1 / zoom) ,) );
     });
 
-    return SingleChildScrollView(
+  }
+
+  List<TextSpan> textBits = [];
+  Widget textScreen() {
+        return SingleChildScrollView(
       child: Column(
         children: [
           Container(
             padding: EdgeInsets.all(30),
             child: Text(chapterTitle, style: TextStyle(fontSize: 30),),),
-    Container(
-      padding: EdgeInsets.symmetric(horizontal: 15),
-      child: RichText(
-      text: TextSpan(
-      children: textBits,),),
-    ),]
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 15),
+            child: RichText(
+            text: TextSpan(
+            children: textBits,),),
+          ),
+        ]
       )
     );
   }
-
   bool zoomed = false;
   List<Widget> markers = [];
-
   Widget viewer() {
+    updateMarkers();
     return Stack(
           children: [
             StatefulBuilder(
