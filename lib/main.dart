@@ -203,6 +203,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     print('downloading text data' + itemRef.fullPath);
     final Uint8List? a = await itemRef.getData();
     reading = utf8.decode(a!);
+    String questions = '';
+    if (reading.contains('-Questions-')) {
+      List<String> qsplit = reading.split('-Questions-');
+      reading = qsplit[0];
+      questions = qsplit[1];
+    }
     List<String> markerSplit = reading.split('see marker ' );
     textBits = [];
     markerSplit.asMap().forEach((key, value) {
@@ -226,12 +232,64 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
         addMarker(where);
       }
     });
+
+    questionCards = [];
+    if (questions.length > 1) {
+      List<String> qs = questions.split('\n');
+      print(questions);
+      print(qs);
+      qs.asMap().forEach((key, value) {
+        if (value.length < 2) {
+          return;
+        }
+        print('asdfasdf ' + value);
+        String stem = value.substring(0 , value.indexOf(':'));
+        List<String> ansString = value.split(':').sublist(1);
+        String trueAns = ansString.last.split(';')[1];
+        ansString.last = ansString.last.split(';')[0];
+        List<Widget> ans = ansString.map((e) => Container(
+          child: e[0] == '*' ? Text(e.substring(1)) : Text(e),
+          decoration: BoxDecoration(
+            color: e[0] == '*' ? Colors.lightBlue : Colors.grey,
+            borderRadius: BorderRadius.circular(15)
+          ),
+          
+          padding: EdgeInsets.all(10),
+        )).toList();
+
+        questionCards.add(
+          Padding(
+            padding: EdgeInsets.all(20),
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(10),
+                child: Row(
+                  children: [Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text( "#" + key.toString() + "   " +  stem ),
+                      Container(height: 20,),
+                      Wrap(
+                        spacing: 10,
+                        children: ans,
+                      ),
+                      Container(height: 20,),
+                      Text(trueAns)
+                    ],
+                  ))],
+                ),
+              ),
+            ),
+          )
+        );
+      });
+    }
+
     setState(() {
 
     });
   }
-
-
+  List<Widget> questionCards = [];
   List<Widget> drawerItems = [];
   List<String> chapterImages = [];
 
@@ -498,24 +556,41 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     setState(() {
       print('changing decoration at: ' +  fullListMarkers.indexOf(where).toString());
       coolColor = Colors.blue;
+      hideAllMarkers();
       activeMarkerColorList[ fullListMarkers.indexOf(where) ] = BoxDecoration(
         color: Colors.transparent,
-        border: Border.all(color: Colors.orange, width: 1)
+        border: Border.all(color: Colors.lightBlue, width: 4),
+
       );
+      showingMarker = true;
     });
     animateTo(
         Matrix4.fromList([zoom, 0, 0, 0,
           0, zoom, 0, 0,
           0, 0, zoom, 0,
-          -zoom * x * ( min )  ,
-          -zoom * y * ( min ) , 0, 1])
+          -zoom * x * ( min ),
+          -zoom * y * ( min ), 0, 1])
     );
+  }
+  hideAllMarkers() {
+    print('hiding markers');
+    activeMarkerColorList = List.generate(activeMarkerColorList.length, (index) => BoxDecoration());
+    showingMarker = false;
+  }
+  showAllMarkers() {
+    print('showing markers');
+    activeMarkerColorList = List.generate(activeMarkerColorList.length, (index) => BoxDecoration(
+      color: Colors.transparent,
+      border: Border.all(color: Colors.lightBlue, width: 4),
+    ));
+    showingMarker = true;
   }
   Color coolColor = Colors.red;
   List<String> fullListMarkers = [];
   List<BoxDecoration> activeMarkerColorList = [];
   int addingMarkerIndex = 0;
   List<StateSetter> markerStateSetList = [];
+  bool showingMarker = false;
   addMarker(String where) {
 
     activeMarkerColorList.add(BoxDecoration());
@@ -524,6 +599,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
   updateMarkers() {
     markers = [];
+    int rack = 0;
     fullListMarkers.forEach((where) {
       List<String> whereSplit = where.split(',');
       print(whereSplit);
@@ -534,16 +610,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
         child: AnimatedContainer(
             width: 500 * (1 / zoom),
             height: 500 * (1 / zoom),
-            color: coolColor,
-            //decoration: activeMarkerColorList[rack],
-            duration: Duration(milliseconds: 300),
-
+//            color: coolColor,
+            decoration: activeMarkerColorList[rack],
+            duration: Duration(milliseconds: 700),
+          curve: Curves.easeOut,
           ) ,
         top: 1000*y + 250 * (1 / zoom),
         left: 1000*x + 250 * (1 / zoom) ,) );
+      rack++;
     });
-
   }
+
 
   List<TextSpan> textBits = [];
   Widget textScreen() {
@@ -559,6 +636,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             text: TextSpan(
             children: textBits,),),
           ),
+          Container(
+            padding: EdgeInsets.all(30),
+            child: Text('Chapter Questions', style: TextStyle(fontSize: 30),),),
+          ...questionCards
         ]
       )
     );
@@ -823,6 +904,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 //               tooltip: 'Toggle Quality',
 //               child: Icon(Icons.high_quality),
 //             ),
+            FloatingActionButton(
+              onPressed: () => {
+                showingMarker ? setState((){ hideAllMarkers(); }) : setState(() { showAllMarkers(); }),
+              },
+              tooltip: showingMarker ? "Hide markers" : "Show all markers",
+              child: showingMarker ? Icon(Icons.layers_clear) : Icon(Icons.pin_drop),
+            ),
+            Container(width: 10),
             FloatingActionButton(
               onPressed: () => {
                 previousImage(),
