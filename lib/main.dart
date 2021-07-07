@@ -215,7 +215,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       if (key > 0) {
         value = value.replaceRange(0, value.indexOf(' ') + 1, '');
       }
-      textBits.add(TextSpan(text: value , style: GoogleFonts.montserrat()));
+      textBits.add(TextSpan(text: value , style: GoogleFonts.montserrat(color: Colors.black)));
 
       if (key < markerSplit.length - 1) {
         String where = markerSplit[key + 1].substring(0, markerSplit[key + 1].indexOf(' '));
@@ -247,39 +247,74 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
         List<String> ansString = value.split(':').sublist(1);
         String trueAns = ansString.last.split(';')[1];
         ansString.last = ansString.last.split(';')[0];
-        List<Widget> ans = ansString.map((e) => Container(
-          child: e[0] == '*' ? Text(e.substring(1)) : Text(e),
-          decoration: BoxDecoration(
-            color: e[0] == '*' ? Colors.lightBlue : Colors.grey,
-            borderRadius: BorderRadius.circular(15)
-          ),
-          
-          padding: EdgeInsets.all(10),
-        )).toList();
 
+        bool showAnswer = false;
         questionCards.add(
-          Padding(
-            padding: EdgeInsets.all(20),
-            child: Card(
-              child: Padding(
+          StatefulBuilder(
+
+            builder: (BuildContext context, StateSetter updateCard) {
+
+              List<Widget> ans = [];
+              ansString.asMap().forEach((answerNumber, answerValue) {
+                Color showColor = Colors.grey;
+                if (answerValue[0] == '*') {
+                  showColor = Colors.lightBlueAccent;
+                }
+                BoxDecoration decoration =  BoxDecoration(color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                    color: Colors.black, width: 1) ) ;
+                if (showAnswer) {
+                  decoration = BoxDecoration(color: showColor,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.transparent, width: 1),
+                  );
+                }
+                ans.add(Padding(
                 padding: EdgeInsets.all(10),
-                child: Row(
-                  children: [Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text( "#" + key.toString() + "   " +  stem ),
-                      Container(height: 20,),
-                      Wrap(
-                        spacing: 10,
-                        children: ans,
-                      ),
-                      Container(height: 20,),
-                      Text(trueAns)
-                    ],
-                  ))],
+              child: GestureDetector(
+                onTap: () {
+                  showAnswer = !showAnswer;
+                  updateCard((){});
+
+                },
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 300),
+                child: answerValue[0] == '*' ? Text(answerValue.substring(1)) : Text(answerValue),
+                decoration: decoration,
+                padding: EdgeInsets.all(10),
                 ),
-              ),
-            ),
+              ),));
+
+              });
+
+              return Padding(
+                padding: EdgeInsets.all(20),
+                child: Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Row(
+                      children: [Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text( "#" + key.toString() + "   " +  stem ),
+                          Container(height: 20,),
+                          Wrap(
+                            spacing: 10,
+                            children: ans,
+                          ),
+                          Container(height: 20,),
+                          AnimatedContainer(
+                            duration: Duration(milliseconds: 300),
+                              height: showAnswer ? 100 : 0,
+                              child: Text(trueAns))
+                        ],
+                      ))],
+                    ),
+                  ),
+                ),
+              );
+            }
           )
         );
       });
@@ -557,11 +592,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       print('changing decoration at: ' +  fullListMarkers.indexOf(where).toString());
       coolColor = Colors.blue;
       hideAllMarkers();
-      activeMarkerColorList[ fullListMarkers.indexOf(where) ] = BoxDecoration(
-        color: Colors.transparent,
-        border: Border.all(color: Colors.lightBlue, width: 4),
-
-      );
+      activeMarkerColorList[ fullListMarkers.indexOf(where) ] = markerOnBox;
       showingMarker = true;
     });
     animateTo(
@@ -579,17 +610,23 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
   showAllMarkers() {
     print('showing markers');
-    activeMarkerColorList = List.generate(activeMarkerColorList.length, (index) => BoxDecoration(
-      color: Colors.transparent,
-      border: Border.all(color: Colors.lightBlue, width: 4),
-    ));
+    activeMarkerColorList = List.generate(activeMarkerColorList.length, (index) => BoxDecoration());
+    fullListMarkers.asMap().forEach((key, value) {
+      if (value.contains(pictureName)) {
+        activeMarkerColorList[key] = markerOnBox;
+      }
+    });
+
     showingMarker = true;
   }
+  BoxDecoration markerOnBox = BoxDecoration(
+    color: Colors.transparent,
+    border: Border.all(color: Colors.lightBlue, width: 4),
+  );
   Color coolColor = Colors.red;
   List<String> fullListMarkers = [];
   List<BoxDecoration> activeMarkerColorList = [];
   int addingMarkerIndex = 0;
-  List<StateSetter> markerStateSetList = [];
   bool showingMarker = false;
   addMarker(String where) {
 
@@ -791,6 +828,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   nextImage() {
     if (chapterImages.contains(currentImagePath)) {
       if (chapterImages.indexOf(currentImagePath) + 1 < chapterImages.length) {
+        hideAllMarkers();
         initImage(chapterImages[ chapterImages.indexOf(currentImagePath) + 1 ] );
       }
     }
@@ -799,6 +837,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   previousImage() {
     if (chapterImages.contains(currentImagePath)) {
       if (chapterImages.indexOf(currentImagePath) - 1 >= 0) {
+        hideAllMarkers();
         initImage(chapterImages[ chapterImages.indexOf(currentImagePath) - 1 ] );
       }
     }
@@ -811,7 +850,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     return Scaffold(
       key: scafKey,
       appBar: AppBar(
+        centerTitle: true,
         flexibleSpace: Container(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(width: 10,),
+              Text("Dermpath", style: GoogleFonts.montserrat(fontSize: 20, color: Colors.white),),
+              Text("  -in-  ", style: GoogleFonts.montserrat(fontSize: 10, color: Colors.white),),
+              Text("Practice", style: GoogleFonts.montserrat(fontSize: 20, color: Colors.white),),
+              Container(width: 10),
+            ],
+          ),
             decoration: BoxDecoration(
       gradient: LinearGradient(
       begin: Alignment.centerLeft,
@@ -825,16 +875,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
         actions: [
           Container()
         ],
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(width: 10,),
-            Text("Dermpath", style: GoogleFonts.montserrat(fontSize: 20),),
-            Text("  -in-  ", style: GoogleFonts.montserrat(fontSize: 10),),
-            Text("Practice", style: GoogleFonts.montserrat(fontSize: 20),),
-            Container(width: 10),
-          ],
-        ),
+
       ),
       drawer: Drawer(
         child: ListView(
