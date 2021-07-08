@@ -85,10 +85,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
 
   void _animateResetInitialize() {
-    final a = _transformationController.value.storage;
-    double b = MediaQuery.of(context).size.width ;
-    print(a);
-    print(b);
 
     _controllerReset.reset();
     _animationReset = Matrix4Tween(
@@ -307,7 +303,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                           AnimatedContainer(
                             duration: Duration(milliseconds: 300),
                               height: showAnswer ? 100 : 0,
-                              child: Text(trueAns))
+                              child: showAnswer ? Text(trueAns) : null )
                         ],
                       ))],
                     ),
@@ -441,38 +437,92 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     String first = '';
     listRef
         .listAll()
-        .then((res) => {
+        .then((res)  {
           if (res.prefixes.length > 0) {
-            first = res.prefixes.first.name,
-          },
-      res.prefixes.forEach((itemRef) => {
+            first = res.prefixes.first.name;
+          };
+      res.prefixes.forEach((itemRef) {
         // All the items under listRef.
-        print(itemRef),
+        print(itemRef);
+        if (itemRef.name.contains(',')) {
 
-        drawerItems.add(ListTile(
-          title: Text(itemRef.name),
-          onTap: () =>
-          {
-            print('tapped'),
-            setState(() =>
-            {
-              chapterTitle = itemRef.name,
-              if (chapterTitle.contains('Tiled') ) {
-                tiled = true,
-                startTiled(),
+          List<String> csplit = itemRef.name.split(',');
+          String top = csplit[0];
+          List<List<String>> subs = [ ['' , ''] ];
+          int index = 0;
+          csplit.sublist(1).forEach((element) {
+
+
+            if (element.substring(0,element.indexOf(' ') ).contains('i')
+                || element.substring(0,element.indexOf(' ') ).contains('v') ) {
+              subs[index][1] = subs[index][1] + ':' + element;
+              print(element + 'sub');
+            }else{
+              if (element[0] == 'A') {
+
               }else{
-                tiled = false,
-                print('turning off tiled'),
-                changeChapter(),
-              },
+                print('iterate');
+                subs.add([ '' , '']);
+                index++;
+              }
+              subs[index][0] = element;
 
-              _loading = true,
-            }),
-            Navigator.pop(context),
+            }
 
-          },
-        )),
-      }),
+          });
+          print(subs);
+          List<Widget> subWid = [];
+          subs.asMap().forEach((key, e) {
+            if (e[1].length > 1) {
+              subWid.add(ExpansionTile(
+                title:  Text('    ' + e[0] ),
+                children:  e[1].split(':').sublist(1).map((e) => ListTile(title: Text('        ' + e)) ).toList(), ));
+            }else{
+              subWid.add(
+                ListTile(
+                  horizontalTitleGap: 20,
+                  title: Text('    ' + e[0],), )
+              );
+            }
+          });
+
+          drawerItems.add(
+              ExpansionTile(
+                title: Text(top),
+                children:
+                  subWid,
+
+              )
+          );
+
+
+        }else{
+          drawerItems.add(ListTile(
+            title: Text(itemRef.name),
+            onTap: () =>
+            {
+              print('tapped'),
+              setState(() =>
+              {
+                chapterTitle = itemRef.name,
+                if (chapterTitle.contains('Tiled') ) {
+                  tiled = true,
+                  startTiled(),
+                }else{
+                  tiled = false,
+                  print('turning off tiled'),
+                  changeChapter(),
+                },
+
+                _loading = true,
+              }),
+              Navigator.pop(context),
+
+            },
+          ));
+        }
+
+      });
       res.items.forEach((itemRef) {
         drawerItems.add(ListTile(
           title: Text(itemRef.name),
@@ -488,7 +538,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
           },
         ));
-      }),
+      });
       if (startingUp) {
         setState(() {
           startingUp = false;
@@ -497,11 +547,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             changeChapter();
             _loading = true;
           }
-        }),
-      },
-    drawerItems.add(creditTile),
+        });
+      };
+    drawerItems.add(creditTile);
     })
-        .onError((error, stackTrace) => {});
+        .onError((error, stackTrace) {
+
+    });
 
   }
   IconData infoIcon = Icons.info;
@@ -559,7 +611,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     html.window.open(url, 'PlaceholderName');
   }
 
-
+  printMarker() {
+    print(viewerKey.currentContext!.size);
+    double w = viewerKey.currentContext!.size!.width;
+    double h = viewerKey.currentContext!.size!.height;
+    double min = 0;
+    if (w > h) {
+      min = w;
+    }else{
+      min = h;
+    }
+    double zoom = _transformationController.value[0];
+    double x = -1 * ( _transformationController.value[12] / zoom ) / min;
+    double y = -1 * ( _transformationController.value[13] / zoom ) / min;
+    print(' see marker ' + pictureName + ',' + zoom.toStringAsFixed(2) + ',' + x.toStringAsFixed(2) + ',' + y.toStringAsFixed(2) + ' ' );
+  }
 
   goToMarker(String where) {
     List<String> whereSplit = where.split(',');
@@ -700,7 +766,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                     panEnabled: true, // Set it to false to prevent panning.
                     boundaryMargin: EdgeInsets.all(80),
                     minScale: 0.5,
-                    maxScale: 20,
+                    maxScale: 10,
                     constrained: true,
                     clipBehavior: Clip.hardEdge,
                     transformationController: _transformationController,
@@ -971,6 +1037,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             Container(width: 10),
             FloatingActionButton(
               onPressed: () => {
+                printMarker(),
                 _animateResetInitialize()
               },
               tooltip: 'Reset Zoom',
