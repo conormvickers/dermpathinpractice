@@ -65,7 +65,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     _animationController = AnimationController(duration: Duration(milliseconds: 300), vsync: this);
     _animation =  CurvedAnimation(parent: _animationController, curve: Curves.easeOut); // IntTween(begin: 100, end: 0).animate(_animationController);
     _animation.addListener(() => setState(() {
-      print(_animation.value);
     }));
 
     _controllerReset = AnimationController(
@@ -640,6 +639,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
 
   goToMarker(String where) {
+
+    if (!showViewer) {
+      print('opening viewer');
+      toggleViewer();
+      print('done');
+    }
+
     List<String> whereSplit = where.split(',');
     print(whereSplit);
     String targetImageName = whereSplit[0];
@@ -738,7 +744,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
 
   List<TextSpan> textBits = [];
-  Widget textScreen() {
+  toggleViewer() {
+    if (_animationController.value == 0.0) {
+      _animationController.forward();
+      Future.delayed( Duration(milliseconds: 100),() {
+        showViewer = false;
+      });
+    } else {
+      _animationController.reverse();
+      Future.delayed( Duration(milliseconds: 100),() {
+        showViewer = true;
+      });
+
+    }
+  }
+  Widget textScreen([bool bottom = false]) {
         return Stack(
           children: [
             SingleChildScrollView(
@@ -760,29 +780,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
             ]
       )
     ),
-            Positioned(
-              right: 0,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Column(
+                  mainAxisAlignment:bottom ? MainAxisAlignment.start : MainAxisAlignment.end,
                   children: [
-                    IconButton(icon: Icon( Icons.arrow_right ), onPressed: () {
-                      if (_animationController.value == 0.0) {
-                        _animationController.forward();
-                        Future.delayed( Duration(milliseconds: 100),() {
-                          showViewer = false;
-                        });
-                      } else {
-                        _animationController.reverse();
-                        Future.delayed( Duration(milliseconds: 100),() {
-                          showViewer = true;
-                        });
 
-                      }
-                    },
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple,
+                        borderRadius: bottom ?  BorderRadius.only(bottomLeft: Radius.circular(15)) :  BorderRadius.only(topLeft: Radius.circular(15)),
+                      ),
+                      child: IconButton(
+                        tooltip: !showViewer ? 'Show Viewer' : 'Hide Viewer',
+                        icon: Icon( !showViewer ? Icons.pageview_rounded : bottom ? Icons.keyboard_arrow_up_outlined : Icons.chevron_right, color: Colors.white,), onPressed: () {
+                        toggleViewer();
+                      },
 
-            ),
+                ),
+                    ),
                   ],
-                ))
+                ),
+              ],
+            )
 
           ],
         );
@@ -1076,9 +1097,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       return  Column(
         children: <Widget>[
           Expanded(
+              flex: ((1 - _animation.value ) * 100).toInt(),
               child: viewer(true)),
           Divider(height: 1,),
-          Expanded(child: Container(child: textScreen(),)),
+          Expanded(flex: 100,
+              child: Container(child: textScreen(true),)),
 
         ],
       );
