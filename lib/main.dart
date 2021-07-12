@@ -53,10 +53,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
   String reading = '';
   String chapterTitle = '';
+  late AnimationController _animationController;
+  late Animation _animation;
+  bool showViewer = true;
+
 
   GlobalKey viewerKey = GlobalKey();
   void initState() {
     super.initState();
+
+    _animationController = AnimationController(duration: Duration(milliseconds: 300), vsync: this);
+    _animation =  CurvedAnimation(parent: _animationController, curve: Curves.easeOut); // IntTween(begin: 100, end: 0).animate(_animationController);
+    _animation.addListener(() => setState(() {
+      print(_animation.value);
+    }));
+
     _controllerReset = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -140,6 +151,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     print('looking on firebase for: ' + fullPath);
     ref = storage.ref('/').child(fullPath);
     print(fullPath);
+    ref.getMetadata().then((value) => print(value.updated));
     url = await ref.getDownloadURL();
 
     print('got download url' + url);
@@ -727,30 +739,61 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
   List<TextSpan> textBits = [];
   Widget textScreen() {
-        return SingleChildScrollView(
+        return Stack(
+          children: [
+            SingleChildScrollView(
       child: Column(
-        children: [
-          Container(
-            padding: EdgeInsets.all(30),
-            child: Text(chapterTitle, style: TextStyle(fontSize: 30),),),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 15),
-            child: RichText(
-            text: TextSpan(
-            children: textBits,),),
-          ),
-          Container(
-            padding: EdgeInsets.all(30),
-            child: Text('Chapter Questions', style: TextStyle(fontSize: 30),),),
-          ...questionCards
-        ]
+            children: [
+              Container(
+                padding: EdgeInsets.all(30),
+                child: Text(chapterTitle, style: TextStyle(fontSize: 30),),),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 15),
+                child: RichText(
+                text: TextSpan(
+                children: textBits,),),
+              ),
+              Container(
+                padding: EdgeInsets.all(30),
+                child: Text('Chapter Questions', style: TextStyle(fontSize: 30),),),
+              ...questionCards
+            ]
       )
-    );
+    ),
+            Positioned(
+              right: 0,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(icon: Icon( Icons.arrow_right ), onPressed: () {
+                      if (_animationController.value == 0.0) {
+                        _animationController.forward();
+                        Future.delayed( Duration(milliseconds: 100),() {
+                          showViewer = false;
+                        });
+                      } else {
+                        _animationController.reverse();
+                        Future.delayed( Duration(milliseconds: 100),() {
+                          showViewer = true;
+                        });
+
+                      }
+                    },
+
+            ),
+                  ],
+                ))
+
+          ],
+        );
   }
   bool zoomed = false;
   List<Widget> markers = [];
   Widget viewer([bool top = false]) {
     updateMarkers();
+    if (!showViewer) {
+      return Container();
+    }
     if (top) {
       return Stack(
         children: [
@@ -977,63 +1020,63 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   Widget viewerTools() {
     return Padding(
       padding: EdgeInsets.all(10),
-      child: Row(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-
-          // Text(tiled ? zoomed ? 'high quality' : 'low quality' : 'n/a' ),
-//             FloatingActionButton(
-//               onPressed: () => {
-//                 zoomed = !zoomed,
-//                 setState(() {})
-// //                _animateResetInitialize()
-//               },
-//               tooltip: 'Toggle Quality',
-//               child: Icon(Icons.high_quality),
-//             ),
-          FloatingActionButton(
-            onPressed: () => {
-              showingMarker ? setState((){ hideAllMarkers(); }) : setState(() { showAllMarkers(); }),
-            },
-            tooltip: showingMarker ? "Hide markers" : "Show all markers",
-            child: showingMarker ? Icon(Icons.layers_clear) : Icon(Icons.pin_drop),
-          ),
-          Container(width: 10),
-          FloatingActionButton(
-            onPressed: () => {
-              previousImage(),
-            },
-            tooltip: "Previous Image",
-            child: Icon(Icons.arrow_left),
-          ),
-          Container(width: 10),
-          FloatingActionButton(
-            onPressed: () => {
-              nextImage(),
-            },
-            tooltip: "Next Image",
-            child: Icon(Icons.arrow_right),
-          ),
-          Container(width: 10),
-          FloatingActionButton(
-            onPressed: () => {
-              printMarker(),
-              _animateResetInitialize()
-            },
-            tooltip: 'Reset Zoom',
-            child: Icon(Icons.fullscreen),
+          FittedBox(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton(
+                  onPressed: () => {
+                    showingMarker ? setState((){ hideAllMarkers(); }) : setState(() {
+                      showAllMarkers(); }),
+                  },
+                  tooltip: showingMarker ? "Hide markers" : "Show all markers",
+                  child: showingMarker ? Icon(Icons.layers_clear) : Icon(Icons.pin_drop),
+                ),
+                Container(width: 10),
+                FloatingActionButton(
+                  onPressed: () => {
+                    previousImage(),
+                  },
+                  tooltip: "Previous Image",
+                  child: Icon(Icons.arrow_left),
+                ),
+                Container(width: 10),
+                FloatingActionButton(
+                  onPressed: () => {
+                    nextImage(),
+                  },
+                  tooltip: "Next Image",
+                  child: Icon(Icons.arrow_right),
+                ),
+                Container(width: 10),
+                FloatingActionButton(
+                  onPressed: () => {
+                    printMarker(),
+                    _animateResetInitialize()
+                  },
+                  tooltip: 'Reset Zoom',
+                  child: Icon(Icons.fullscreen),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+
   Widget rowOrColumn() {
 
     if (MediaQuery.of(context).size.height > MediaQuery.of(context).size.width) {
       return  Column(
         children: <Widget>[
-          Expanded(child: viewer(true)),
+          Expanded(
+              child: viewer(true)),
           Divider(height: 1,),
           Expanded(child: Container(child: textScreen(),)),
 
@@ -1043,9 +1086,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
 
     return  Row(
       children: <Widget>[
-        Expanded(child: Container(child: textScreen(),)),
+        Expanded(
+            flex: 100,
+            child: Container(child: textScreen(),)),
         VerticalDivider(width: 1,),
-        Expanded(child: viewer()),
+        Expanded(
+            flex: ((1 - _animation.value ) * 100).toInt(),
+            child: viewer()),
       ],
     );
   }
