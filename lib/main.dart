@@ -141,12 +141,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
   }
   String currentImagePath = '';
   String pictureName = '';
+  String trimUrlToName(String url) {
+    if (url.contains('/') && url.contains('.')) {
+      String t = url.substring( url.lastIndexOf('/') + 1, url.lastIndexOf('.') );
+      t = t.replaceAll('_', ' ');
+      return t;
+    }
+    return '';
+  }
   initImage(String fullPath) async {
     currentImagePath = fullPath;
 
-    if (currentImagePath.contains('/') && currentImagePath.contains('.')) {
-      pictureName = currentImagePath.substring( currentImagePath.lastIndexOf('/') + 1, currentImagePath.lastIndexOf('.') );
-    }
+
+    pictureName = trimUrlToName(currentImagePath);
+
+    _loading = true;
+    setState(() {
+
+    });
+
     print('looking on firebase for: ' + fullPath);
     ref = storage.ref('/').child(fullPath);
     print(fullPath);
@@ -339,6 +352,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     markers = [];
     fullListMarkers = [];
     activeMarkerColorList = [];
+    chapterImages = [];
     var listRef = storage.ref().child('/' + chapterTitle);
     bool firstImage = false;
     listRef
@@ -580,7 +594,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
           height: 70,
           width: 70,
           child: FittedBox(
-            child: SpinKitFadingGrid(
+            child: SpinKitFadingCube(
               color: Colors.deepPurple,
             ),
           ),
@@ -635,7 +649,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     double zoom = _transformationController.value[0];
     double x = -1 * ( _transformationController.value[12] / zoom ) / min;
     double y = -1 * ( _transformationController.value[13] / zoom ) / min;
-    print(' see marker ' + pictureName + ',' + zoom.toStringAsFixed(2) + ',' + x.toStringAsFixed(2) + ',' + y.toStringAsFixed(2) + ' ' );
+    print(' see marker ' + pictureName.replaceAll(' ', '_') + ',' + zoom.toStringAsFixed(2) + ',' + x.toStringAsFixed(2) + ',' + y.toStringAsFixed(2) + ' ' );
   }
 
   goToMarker(String where) {
@@ -661,7 +675,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
       }
     });
 
-    initImage( targetImageFullPath );
+    if (currentImagePath != targetImageFullPath) {
+      initImage( targetImageFullPath );
+    }
+
 
     print(viewerKey.currentContext!.size);
     double w = viewerKey.currentContext!.size!.width;
@@ -696,7 +713,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     print('showing markers');
     activeMarkerColorList = List.generate(activeMarkerColorList.length, (index) => BoxDecoration());
     fullListMarkers.asMap().forEach((key, value) {
-      if (value.contains(pictureName)) {
+      if (value.replaceAll('_', ' ').contains(pictureName)) {
         activeMarkerColorList[key] = markerOnBox;
       }
     });
@@ -815,201 +832,124 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
     if (!showViewer) {
       return Container();
     }
+    Widget viewBuilder = StatefulBuilder(
+      builder: (BuildContext context, StateSetter build) =>
+          Center(
+            child: Container(
+
+              decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black, width: 2)
+              ),
+              child: InteractiveViewer(
+                key: viewerKey,
+                panEnabled: true, // Set it to false to prevent panning.
+                boundaryMargin: EdgeInsets.all(80),
+                minScale: 0.5,
+                maxScale: 10,
+                constrained: true,
+                clipBehavior: Clip.hardEdge,
+                transformationController: _transformationController,
+                onInteractionUpdate: (details) {
+                  if (_transformationController.value[0] > 2) {
+
+                    if (!zoomed) {
+                      print('zoomed' + tiled.toString());
+                      zoomed = true;
+                      build(() {});
+                    }
+                  }else{
+                    if (zoomed) {
+                      print('out');
+                      zoomed = false;
+                      build(() {});
+                    }
+                  }
+                },
+                child:
+                FittedBox(
+                  child: Stack(
+                    children: [
+                      Container(
+                        height: 1000,
+                        width: 1000,
+                        child: FittedBox(child: _image),
+
+                      ),
+                      ...markers,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+    );
+    Widget loadingW = _loading ? loadingWidget : Container();
+    List<Widget> navigator = [];
+    if (chapterImages.length > 0) {
+      List<Widget> picThumbs = chapterImages.map((e) => Container(
+        padding: const EdgeInsets.all(8.0),
+        child: Tooltip(
+
+          message: trimUrlToName(e),
+          child: GestureDetector(
+            onTap: () {
+              initImage(e);
+            },
+              child: Container(width: 10, height: 10, color: Colors.pinkAccent,)),
+        ),
+      )).toList();
+      int index = chapterImages.indexOf(currentImagePath);
+      picThumbs[index] = Container(
+          padding: EdgeInsets.all(10),
+          decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              color: Colors.pinkAccent
+          ),
+          child: Text(pictureName , style: TextStyle(color: Colors.white),));
+      navigator = [
+        IconButton(onPressed: () => {
+            previousImage(),
+          },
+          tooltip: "Previous Image",
+          icon: Icon(Icons.arrow_left),),
+        ...picThumbs,
+        IconButton(onPressed: () => {
+          nextImage(),
+        },
+          tooltip: "Next Image",
+          icon: Icon(Icons.arrow_right),),
+      ];
+    }
+
+    Widget pictureNav =
+    Container(
+      alignment: Alignment.topRight,
+      child: Row(
+        children: navigator,
+      ),
+    );
     if (top) {
       return Stack(
         children: [
-          StatefulBuilder(
-            builder: (BuildContext context, StateSetter build) =>
-                Center(
-                  child: Container(
-
-                    decoration: BoxDecoration(
-                        border: Border.all(color: Colors.black, width: 2)
-                    ),
-                    child: InteractiveViewer(
-                      key: viewerKey,
-                      panEnabled: true, // Set it to false to prevent panning.
-                      boundaryMargin: EdgeInsets.all(80),
-                      minScale: 0.5,
-                      maxScale: 10,
-                      constrained: true,
-                      clipBehavior: Clip.hardEdge,
-                      transformationController: _transformationController,
-                      onInteractionUpdate: (details) {
-                        if (_transformationController.value[0] > 2) {
-
-                          if (!zoomed) {
-                            print('zoomed' + tiled.toString());
-                            zoomed = true;
-                            build(() {});
-                          }
-                        }else{
-                          if (zoomed) {
-                            print('out');
-                            zoomed = false;
-                            build(() {});
-                          }
-                        }
-                      },
-                      child:
-                      FittedBox(
-                        child: Stack(
-                          children: [
-                            Container(
-                              height: 1000,
-                              width: 1000,
-                              child: FittedBox(child: Stack(
-                                  children: [
-                                    _image
-                                    // !zoomed ?
-                                    // _image :
-                                    // tiled ? Row(
-                                    //   children: [
-                                    //     Column(
-                                    //       children: [
-                                    //         a, b
-                                    //       ],
-                                    //     ),
-                                    //     Column(
-                                    //       children: [
-                                    //         c , d
-                                    //       ],
-                                    //     ),
-                                    //     Column(
-                                    //       children: [
-                                    //         e , f
-                                    //       ],
-                                    //     ),
-                                    //   ],
-                                    // ) : _image,
-                                  ]
-
-                              )),
-
-                            ),
-                            ...markers,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-          ),
-          _loading ? loadingWidget : Container(),
-          Padding(
-            padding: EdgeInsets.all(10),
-            child: Container(
-              alignment: Alignment.topRight,
-              child: Container(
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      color: Colors.pinkAccent
-                  ),
-                  child: Text(pictureName , style: TextStyle(color: Colors.white),)),
-            ),
-          ),
+          viewBuilder,
+          loadingW,
+          pictureNav,
           Positioned(
-              top: 0,
-              left: 0,
+              bottom: 0,
+              right: 0,
               child: viewerTools()),
         ],
       );
     }
     return Stack(
           children: [
-            StatefulBuilder(
-      builder: (BuildContext context, StateSetter build) =>
-              Center(
-                child: Container(
-
-                  decoration: BoxDecoration(
-                      border: Border.all(color: Colors.black, width: 2)
-                  ),
-                  child: InteractiveViewer(
-                    key: viewerKey,
-                    panEnabled: true, // Set it to false to prevent panning.
-                    boundaryMargin: EdgeInsets.all(80),
-                    minScale: 0.5,
-                    maxScale: 10,
-                    constrained: true,
-                    clipBehavior: Clip.hardEdge,
-                    transformationController: _transformationController,
-                    onInteractionUpdate: (details) {
-                      if (_transformationController.value[0] > 2) {
-
-                        if (!zoomed) {
-                          print('zoomed' + tiled.toString());
-                          zoomed = true;
-                          build(() {});
-                        }
-                      }else{
-                        if (zoomed) {
-                          print('out');
-                          zoomed = false;
-                          build(() {});
-                        }
-                      }
-                    },
-                    child:
-                    FittedBox(
-                      child: Stack(
-                        children: [
-                          Container(
-                            height: 1000,
-                            width: 1000,
-                            child: FittedBox(child: Stack(
-                              children: [
-                                _image
-                                // !zoomed ?
-                                // _image :
-                                // tiled ? Row(
-                                //   children: [
-                                //     Column(
-                                //       children: [
-                                //         a, b
-                                //       ],
-                                //     ),
-                                //     Column(
-                                //       children: [
-                                //         c , d
-                                //       ],
-                                //     ),
-                                //     Column(
-                                //       children: [
-                                //         e , f
-                                //       ],
-                                //     ),
-                                //   ],
-                                // ) : _image,
-                              ]
-
-                            )),
-
-                          ),
-                          ...markers,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-    ),
-            _loading ? loadingWidget : Container(),
-            Padding(
-              padding: EdgeInsets.all(10),
-              child: Container(
-                alignment: Alignment.topRight,
-                child: Container(
-                    padding: EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      color: Colors.pinkAccent
-                    ),
-                    child: Text(pictureName , style: TextStyle(color: Colors.white),)),
-              ),
-            ),
-            viewerTools(),
+            viewBuilder,
+            loadingW,
+            pictureNav,
+            Positioned(
+                bottom: 0,
+                right: 0,
+                child: viewerTools()),
           ],
         );
   }
@@ -1057,22 +997,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin{
                   },
                   tooltip: showingMarker ? "Hide markers" : "Show all markers",
                   child: showingMarker ? Icon(Icons.layers_clear) : Icon(Icons.pin_drop),
-                ),
-                Container(width: 10),
-                FloatingActionButton(
-                  onPressed: () => {
-                    previousImage(),
-                  },
-                  tooltip: "Previous Image",
-                  child: Icon(Icons.arrow_left),
-                ),
-                Container(width: 10),
-                FloatingActionButton(
-                  onPressed: () => {
-                    nextImage(),
-                  },
-                  tooltip: "Next Image",
-                  child: Icon(Icons.arrow_right),
                 ),
                 Container(width: 10),
                 FloatingActionButton(
