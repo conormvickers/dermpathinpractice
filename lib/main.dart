@@ -20,6 +20,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:photo_view/photo_view.dart';
 import 'package:image/image.dart' as imgLib;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mailto/mailto.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -260,7 +263,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             textBits.add(TextSpan(
                 text: '\n' + element.replaceAll('**', ' ') + '\n',
                 style:
-                    GoogleFonts.montserrat(color: Colors.black, fontSize: 40)));
+                    GoogleFonts.montserrat(color: Colors.black, fontSize: 30)));
 
             chaptersRemoved = chaptersRemoved.replaceAll(element, ' ');
             print(chaptersRemoved);
@@ -455,6 +458,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ],
     ),
   );
+  late Widget emailTile = ListTile(
+    onTap: launchMailto,
+    title: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('Feedback'),
+        Icon(
+          Icons.email_outlined,
+          color: Colors.deepPurple,
+        )
+      ],
+    ),
+  );
   late Widget creditWidget = Container(
     child: Column(
       children: [
@@ -600,6 +616,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
       ;
       drawerItems.add(creditTile);
+      drawerItems.add(emailTile);
     }).onError((error, stackTrace) {});
   }
 
@@ -671,7 +688,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     double zoom = _transformationController.value[0];
     double x = -1 * (_transformationController.value[12] / zoom) / min;
     double y = -1 * (_transformationController.value[13] / zoom) / min;
-    print(' see marker ' +
+    print('***' +
         pictureName.replaceAll(' ', '_') +
         ',' +
         zoom.toStringAsFixed(2) +
@@ -679,7 +696,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         x.toStringAsFixed(2) +
         ',' +
         y.toStringAsFixed(2) +
-        ' ');
+        '***');
   }
 
   goToMarker(String where) {
@@ -941,6 +958,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
     Widget loadingW = _loading ? loadingWidget : Container();
     List<Widget> navigator = [];
+    Widget pictureNav = Container();
     if (chapterImages.length > 0) {
       List<Widget> picThumbs = chapterImages
           .map((e) => Container(
@@ -954,7 +972,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       child: Container(
                         width: 10,
                         height: 10,
-                        color: Colors.pinkAccent,
+                        color: Colors.lightBlue,
                       )),
                 ),
               ))
@@ -964,7 +982,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           padding: EdgeInsets.all(10),
           decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(15),
-              color: Colors.pinkAccent),
+              color: Colors.lightBlue),
           child: Text(
             pictureName,
             style: TextStyle(color: Colors.white),
@@ -975,7 +993,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             previousImage(),
           },
           tooltip: "Previous Image",
-          icon: Icon(Icons.arrow_left),
+          icon: Icon(Icons.arrow_left, color: Colors.lightBlue,),
         ),
         ...picThumbs,
         IconButton(
@@ -983,17 +1001,38 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             nextImage(),
           },
           tooltip: "Next Image",
-          icon: Icon(Icons.arrow_right),
+          icon: Icon(Icons.arrow_right, color: Colors.lightBlue,),
         ),
+        PopupMenuButton(
+          tooltip: 'Browse Images',
+          child: Icon(Icons.image_search, color: Colors.lightBlue,),
+    onSelected: (value) {
+    initImage(value as String);
+    },
+          itemBuilder: (BuildContext context) {
+
+
+          return chapterImages.map((e) => PopupMenuItem<String>(
+              child: Text(trimUrlToName(e)),
+          value: e,
+
+          )).toList();
+        },
+        )
       ];
+      pictureNav =
+      Container(
+        alignment: Alignment.topRight,
+        child: FittedBox(
+          child: Row(
+            children: navigator,
+          ),
+        ),
+      );
     }
 
-    Widget pictureNav = Container(
-      alignment: Alignment.topRight,
-      child: Row(
-        children: navigator,
-      ),
-    );
+
+
     if (top) {
       return Stack(
         children: [
@@ -1013,6 +1052,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ],
     );
   }
+
+  launchMailto() async {
+    final mailtoLink = Mailto(
+      to: ['conormvickers@gmail.com'],
+      subject: 'Dermpath In Practice Feedback',
+      body: 'Hey this app is awesome!\n\nI was on ' + chapterTitle + ' when...\n',
+    );
+
+    await launch('$mailtoLink');
+  }
+
 
   Widget mag = Container();
   bool magUp = false;
