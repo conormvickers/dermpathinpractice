@@ -17,12 +17,10 @@ import 'package:vector_math/vector_math_64.dart' show Vector3;
 import 'dart:math' as math;
 import 'package:clipboard/clipboard.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:photo_view/photo_view.dart';
 import 'package:image/image.dart' as imgLib;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mailto/mailto.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -222,6 +220,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   late String rawInfo;
   late List<String> caseSections;
   List<String> subChapters = [];
+  List<String> entityParts = [
+    'Clinical features:',
+    'Histopathology:',
+    'Clinicopathologic correlation:',
+    'Histopathologic differential diagnosis:',
+    'Example line diagnosis:',
+    'For the clinician:',
+  ];
 
   updateInfo(firebase_storage.Reference itemRef) async {
     subChapters = [];
@@ -274,13 +280,45 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   .split(' ')
                   .sublist(0, element.split(' ').length - 1)
                   .join(' ');
-              textBits.add(TextSpan(
-                  text: lastWord,
-                  style: GoogleFonts.montserrat(color: Colors.black)));
+              List<String> enterSplit = lastWord.split('\n');
+              enterSplit.asMap().forEach((key, ee) {
+                bool entityPartFound = false;
+                entityParts.forEach((entityPart) {
+                  if (ee.toUpperCase().contains(entityPart.toUpperCase())) {
+                    entityPartFound = true;
+                  }
+                });
+                if (entityPartFound) {
+                  textBits.add(TextSpan(
+                      text: ee + (key != enterSplit.length - 1 ? '\n' : ''),
+                      style: GoogleFonts.montserrat(
+                          color: Colors.black, fontSize: 20)));
+                } else {
+                  textBits.add(TextSpan(
+                      text: ee + (key != enterSplit.length - 1 ? '\n' : ''),
+                      style: GoogleFonts.montserrat(color: Colors.black)));
+                }
+              });
             } else {
-              textBits.add(TextSpan(
-                  text: element,
-                  style: GoogleFonts.montserrat(color: Colors.black)));
+              List<String> enterSplit = element.split('\n');
+              enterSplit.forEach((ee) {
+                bool entityPartFound = false;
+                entityParts.forEach((entityPart) {
+                  if (ee.toUpperCase().contains(entityPart.toUpperCase())) {
+                    entityPartFound = true;
+                  }
+                });
+                if (entityPartFound) {
+                  textBits.add(TextSpan(
+                      text: ee + (key != enterSplit.length - 1 ? '\n' : ''),
+                      style: GoogleFonts.montserrat(
+                          color: Colors.black, fontSize: 20)));
+                } else {
+                  textBits.add(TextSpan(
+                      text: ee + (key != enterSplit.length - 1 ? '\n' : ''),
+                      style: GoogleFonts.montserrat(color: Colors.black)));
+                }
+              });
             }
           }
         });
@@ -981,8 +1019,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       picThumbs[index] = Container(
           padding: EdgeInsets.all(10),
           decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
-              color: Colors.lightBlue),
+              borderRadius: BorderRadius.circular(15), color: Colors.lightBlue),
           child: Text(
             pictureName,
             style: TextStyle(color: Colors.white),
@@ -993,7 +1030,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             previousImage(),
           },
           tooltip: "Previous Image",
-          icon: Icon(Icons.arrow_left, color: Colors.lightBlue,),
+          icon: Icon(
+            Icons.arrow_left,
+            color: Colors.lightBlue,
+          ),
         ),
         ...picThumbs,
         IconButton(
@@ -1001,27 +1041,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             nextImage(),
           },
           tooltip: "Next Image",
-          icon: Icon(Icons.arrow_right, color: Colors.lightBlue,),
+          icon: Icon(
+            Icons.arrow_right,
+            color: Colors.lightBlue,
+          ),
         ),
         PopupMenuButton(
           tooltip: 'Browse Images',
-          child: Icon(Icons.image_search, color: Colors.lightBlue,),
-    onSelected: (value) {
-    initImage(value as String);
-    },
+          child: Icon(
+            Icons.image_search,
+            color: Colors.lightBlue,
+          ),
+          onSelected: (value) {
+            initImage(value as String);
+          },
           itemBuilder: (BuildContext context) {
-
-
-          return chapterImages.map((e) => PopupMenuItem<String>(
-              child: Text(trimUrlToName(e)),
-          value: e,
-
-          )).toList();
-        },
+            return chapterImages
+                .map((e) => PopupMenuItem<String>(
+                      child: Text(trimUrlToName(e)),
+                      value: e,
+                    ))
+                .toList();
+          },
         )
       ];
-      pictureNav =
-      Container(
+      pictureNav = Container(
         alignment: Alignment.topRight,
         child: FittedBox(
           child: Row(
@@ -1030,8 +1074,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ),
       );
     }
-
-
 
     if (top) {
       return Stack(
@@ -1057,12 +1099,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final mailtoLink = Mailto(
       to: ['conormvickers@gmail.com'],
       subject: 'Dermpath In Practice Feedback',
-      body: 'Hey this app is awesome!\n\nI was on ' + chapterTitle + ' when...\n',
+      body:
+          'Hey this app is awesome!\n\nI was on ' + chapterTitle + ' when...\n',
     );
 
     await launch('$mailtoLink');
   }
-
 
   Widget mag = Container();
   bool magUp = false;
