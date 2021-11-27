@@ -1,5 +1,8 @@
 import 'dart:convert';
-import 'dart:html' as html;
+import 'dart:io';
+// import 'dart:html' as html;
+import "package:universal_html/html.dart" as html;
+import 'package:path_provider/path_provider.dart';
 import 'dart:io' as io;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' as foundation;
@@ -21,6 +24,7 @@ import 'package:image/image.dart' as imgLib;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mailto/mailto.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,8 +64,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   bool showViewer = true;
 
   GlobalKey viewerKey = GlobalKey();
+
+  asyncSetup() async {
+    if (!kIsWeb) {
+      directory = await getApplicationDocumentsDirectory();
+    }
+    updateDrawer();
+  }
+
+  clearEVERYTHING() {
+    Directory(directory.path).list().forEach((element) {
+      if (element is Directory) {
+        element.list().forEach((sub) {
+          print('element:: ' + sub.path);
+          sub.deleteSync();
+        });
+      } else {
+        print('element:: ' + element.path);
+        element.deleteSync();
+      }
+    });
+  }
+
   void initState() {
     super.initState();
+    asyncSetup();
 
     _animationController =
         AnimationController(duration: Duration(milliseconds: 300), vsync: this);
@@ -75,7 +102,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    updateDrawer();
+
     slideController = TransformationController();
     _image = Image.memory(kTransparentImage);
     _loading = false;
@@ -161,42 +188,47 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _loading = true;
     setState(() {});
 
-    print('looking on firebase for: ' + fullPath);
-    ref = storage.ref('/').child(fullPath);
-    print(fullPath);
-    ref.getMetadata().then((value) => print(value.updated));
-    url = await ref.getDownloadURL();
+    if (kIsWeb) {
+      print('looking on firebase for: ' + fullPath);
+      ref = storage.ref('/').child(fullPath);
+      print(fullPath);
+      ref.getMetadata().then((value) => print(value.updated));
+      url = await ref.getDownloadURL();
 
-    print('got download url' + url);
+      print('got download url' + url);
 
-    if (url.contains('.tif')) {
-      print('tiff image');
-      final response = await http.get(Uri.parse(url));
-      imgLib.Decoder dec = imgLib.findDecoderForData(response.bodyBytes)!;
-      print(dec);
-      _image = Image.memory(Uint8List.fromList(
-          imgLib.encodePng(dec.decodeImage(response.bodyBytes)!)));
+      if (url.contains('.tif')) {
+        print('tiff image');
+        final response = await http.get(Uri.parse(url));
+        imgLib.Decoder dec = imgLib.findDecoderForData(response.bodyBytes)!;
+        print(dec);
+        _image = Image.memory(Uint8List.fromList(
+            imgLib.encodePng(dec.decodeImage(response.bodyBytes)!)));
+      } else {
+        _image = Image.network(
+          url,
+          fit: BoxFit.contain,
+          loadingBuilder: (BuildContext context, Widget child,
+              ImageChunkEvent? loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return Center(
+              child: CircularProgressIndicator(
+                backgroundColor: Colors.pinkAccent.withOpacity(0.5),
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+        );
+      }
     } else {
-      _image = Image.network(
-        url,
-        fit: BoxFit.contain,
-        loadingBuilder: (BuildContext context, Widget child,
-            ImageChunkEvent? loadingProgress) {
-          if (loadingProgress == null) {
-            return child;
-          }
-          return Center(
-            child: CircularProgressIndicator(
-              backgroundColor: Colors.pinkAccent.withOpacity(0.5),
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                      loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
-          );
-        },
-      );
+      _image = Image.file(File(fullPath));
     }
+
     setState(() {});
     _image.image.resolve(ImageConfiguration()).addListener(
       ImageStreamListener(
@@ -228,12 +260,92 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     'Example line diagnosis:',
     'For the clinician:',
   ];
+  late Directory directory;
 
-  updateInfo(firebase_storage.Reference itemRef) async {
-    subChapters = [];
-    print('downloading text data' + itemRef.fullPath);
+  checkingAsync(
+      firebase_storage.Reference element, SharedPreferences prefs) async {
+    final f = await element.getMetadata();
+    String? a = f.updated != null ? f.updated!.toIso8601String() : null;
+    String b;
+    File file = File(remoteToLocal(element.fullPath));
+    if (await file.exists()) {
+      final test = prefs.getString(remoteToLocal(element.fullPath));
+      if (test != null) {
+        b = test;
+      } else {
+        b = 'file not found';
+      }
+    } else {
+      b = 'file not found';
+    }
+
+    print('comparing for ' + element.fullPath + '\n');
+    print(a);
+    print(b);
+
+    if (a != null && b != null) {
+      if (a != b) {
+        await downloadMobile(element, prefs, a);
+      }
+    } else {
+      if (a != null) {
+        await downloadMobile(element, prefs, a);
+      }
+    }
+  }
+
+  updateMobileData(
+      firebase_storage.Reference itemRef, SharedPreferences prefs) async {
+    final res = await itemRef.listAll();
+    List<firebase_storage.Reference> asdf = res.items;
+
+    for (var element in asdf) {
+      await checkingAsync(element, prefs);
+    }
+  }
+
+  downloadMobile(firebase_storage.Reference itemRef, SharedPreferences prefs,
+      String lastUpdate) async {
+    print('updating... ' + itemRef.fullPath);
+    File file = File(remoteToLocal(itemRef.fullPath));
+
     final Uint8List? a = await itemRef.getData();
-    reading = utf8.decode(a!);
+    // reading = utf8.decode(a!);
+    if (a != null) {
+      String ff = remoteToLocal(itemRef.fullPath);
+      print('checking directory:: ' + ff.substring(0, ff.lastIndexOf('/')));
+      Directory check = Directory(ff.substring(0, ff.lastIndexOf('/')));
+      if (await check.exists()) {
+      } else {
+        check.create();
+      }
+      await file.writeAsBytes(a);
+      prefs.setString(remoteToLocal(itemRef.fullPath), lastUpdate);
+      print('updated ' + itemRef.fullPath);
+    }
+  }
+
+  updateInfo(String fullPath) async {
+    subChapters = [];
+    Uint8List? a;
+
+    if (kIsWeb) {
+      firebase_storage.Reference itemRef = storage.ref('/').child(fullPath);
+      print('downloading text data' + itemRef.fullPath);
+      final temp = await itemRef.getData();
+      if (temp != null) {
+        a = temp;
+      }
+    } else {
+      print('reading data locally... ' + fullPath);
+      File fileOfText = File(fullPath);
+      a = await fileOfText.readAsBytes();
+    }
+    if (a == null) {
+      return;
+    }
+
+    reading = utf8.decode(a);
     String questions = '';
     if (reading.contains('-Questions-')) {
       List<String> qsplit = reading.split('-Questions-');
@@ -272,7 +384,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     GoogleFonts.montserrat(color: Colors.black, fontSize: 30)));
 
             chaptersRemoved = chaptersRemoved.replaceAll(element, ' ');
-            print(chaptersRemoved);
           } else {
             if (chap >= value.split('**').length - 1 &&
                 key < markerSplit.length - 1) {
@@ -329,13 +440,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     questionCards = [];
     if (questions.length > 1) {
       List<String> qs = questions.split('\n');
-      print(questions);
-      print(qs);
+
       qs.asMap().forEach((key, value) {
         if (value.length < 2) {
           return;
         }
-        print('asdfasdf ' + value);
+
         String stem = value.substring(0, value.indexOf(':'));
         List<String> ansString = value.split(':').sublist(1);
         String trueAns = ansString.last.split(';')[1];
@@ -424,65 +534,73 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<Widget> drawerItems = [];
   List<String> chapterImages = [];
 
-  changeChapter() {
+  String remoteToLocal(String input) {
+    return directory.path + '/' + input.toLowerCase().replaceAll(' ', '_');
+  }
+
+  changeChapter() async {
     markers = [];
     fullListMarkers = [];
     activeMarkerColorList = [];
     chapterImages = [];
-    var listRef = storage.ref().child('/' + chapterTitle);
+
+    List<String> fileInFolder = [];
+    if (!foundation.kIsWeb) {
+      print('using local storage to get data...' + remoteToLocal(chapterTitle));
+      Directory localChapter = Directory(remoteToLocal(chapterTitle));
+      if (await localChapter.exists()) {
+        localChapter.listSync().forEach((element) {
+          fileInFolder.add(element.path);
+        });
+      } else {
+        print('ERROR directory not found!');
+      }
+      print('found locally: ' + fileInFolder.toString());
+      directory.list().forEach((element) {
+        print(element.path);
+      });
+    } else {
+      print('not on mobile, using web retreaval...');
+      var listRef = storage.ref().child('/' + chapterTitle);
+      listRef.listAll().then((res) => {
+            res.items.forEach((element) {
+              fileInFolder.add(element.fullPath);
+            })
+          });
+      print('found remotely ' + fileInFolder.toString());
+    }
+
     bool firstImage = false;
-    listRef.listAll().then((res) => {
-          res.items.forEach((element) {
-            if (element.fullPath.endsWith('.jpg') ||
-                element.fullPath.endsWith('.jpeg') ||
-                element.fullPath.endsWith('.png')) {
-              if (!firstImage) {
-                initImage(element.fullPath);
-                firstImage = true;
-              }
-              chapterImages.add(element.fullPath);
-            }
-            if (element.fullPath.endsWith('.txt')) {
-              updateInfo(element);
-            }
-          }),
-        });
-  }
-
-  late Image a;
-  late Image b;
-  late Image c;
-  late Image d;
-  late Image e;
-  late Image f;
-  bool tiled = false;
-
-  startTiled() async {
-    var listRef = storage.ref().child('/dermpathinpractice/' + chapterTitle);
-    listRef.listAll().then((res) => {
-          res.items.forEach((element) async {
-            if (element.fullPath.contains('full')) {
-              initImage(element.fullPath);
-            } else {
-              if (element.fullPath.contains('00')) {
-                a = Image.network(await element.getDownloadURL());
-              } else if (element.fullPath.contains('01')) {
-                b = Image.network(await element.getDownloadURL());
-              } else if (element.fullPath.contains('10')) {
-                c = Image.network(await element.getDownloadURL());
-              } else if (element.fullPath.contains('11')) {
-                d = Image.network(await element.getDownloadURL());
-              } else if (element.fullPath.contains('20')) {
-                e = Image.network(await element.getDownloadURL());
-              } else if (element.fullPath.contains('21')) {
-                f = Image.network(await element.getDownloadURL());
-              }
-            }
-          }),
-        });
+    fileInFolder.forEach((element) {
+      if (element.endsWith('.jpg') ||
+          element.endsWith('.jpeg') ||
+          element.endsWith('.png')) {
+        if (!firstImage) {
+          initImage(element);
+          firstImage = true;
+        }
+        chapterImages.add(element);
+      }
+      if (element.endsWith('.txt')) {
+        updateInfo(element);
+      }
+    });
   }
 
   bool startingUp = true;
+  late Widget updateTile = ListTile(
+    onTap: checkForUpdates,
+    title: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('Check for Updates'),
+        Icon(
+          Icons.cloud_download,
+          color: Colors.deepPurple,
+        )
+      ],
+    ),
+  );
   late Widget creditTile = ListTile(
     onTap: openEndDrawer,
     title: Row(
@@ -496,6 +614,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ],
     ),
   );
+
   late Widget emailTile = ListTile(
     onTap: launchMailto,
     title: Row(
@@ -544,98 +663,79 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     scafKey.currentState!.openEndDrawer();
   }
 
-  updateDrawer() {
+  String getLocalDirName(FileSystemEntity input) {
+    return input.path.substring(input.path.lastIndexOf('/') + 1);
+  }
+
+  String getLocalDirNameFancy(FileSystemEntity input) {
+    return input.path
+        .substring(input.path.lastIndexOf('/') + 1)
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((e) => e.capitalize())
+        .toList()
+        .join(' ');
+  }
+
+  updateDrawer() async {
+    drawerItems = [];
+    print('updating drawer');
     var listRef = storage.ref().child('/');
     String first = '';
-    listRef.listAll().then((res) {
-      if (res.prefixes.length > 0) {
-        first = res.prefixes.first.name;
-      }
-      ;
-      res.prefixes.forEach((itemRef) {
-        // All the items under listRef.
-        print(itemRef);
-        if (itemRef.name.contains(',')) {
-          List<String> csplit = itemRef.name.split(',');
-          String top = csplit[0];
-          List<List<String>> subs = [
-            ['', '']
-          ];
-          int index = 0;
-          csplit.sublist(1).forEach((element) {
-            if (element.substring(0, element.indexOf(' ')).contains('i') ||
-                element.substring(0, element.indexOf(' ')).contains('v')) {
-              subs[index][1] = subs[index][1] + ':' + element;
-              print(element + 'sub');
-            } else {
-              if (element[0] == 'A') {
-              } else {
-                print('iterate');
-                subs.add(['', '']);
-                index++;
-              }
-              subs[index][0] = element;
-            }
-          });
-          print(subs);
-          List<Widget> subWid = [];
-          subs.asMap().forEach((key, e) {
-            if (e[1].length > 1) {
-              subWid.add(ExpansionTile(
-                title: Text('    ' + e[0]),
-                children: e[1]
-                    .split(':')
-                    .sublist(1)
-                    .map((e) => ListTile(title: Text('        ' + e)))
-                    .toList(),
-              ));
-            } else {
-              subWid.add(ListTile(
-                horizontalTitleGap: 20,
-                title: Text(
-                  '    ' + e[0],
-                ),
-              ));
-            }
-          });
 
-          drawerItems.add(ExpansionTile(
-            title: Text(top),
-            children: subWid,
-          ));
-        } else {
+    if (kIsWeb) {
+      listRef.listAll().then((res) {
+        if (res.prefixes.length > 0) {
+          first = res.prefixes.first.name;
+        }
+        res.prefixes.forEach((itemRef) async {
+          // Mobile update
+
           drawerItems.add(ListTile(
             title: Text(itemRef.name),
             onTap: () => {
               print('tapped'),
               setState(() => {
                     chapterTitle = itemRef.name,
-                    if (chapterTitle.contains('Tiled'))
-                      {
-                        tiled = true,
-                        startTiled(),
-                      }
-                    else
-                      {
-                        tiled = false,
-                        print('turning off tiled'),
-                        changeChapter(),
-                      },
+                    changeChapter(),
                     _loading = true,
                   }),
               Navigator.pop(context),
             },
           ));
+        });
+
+        if (startingUp) {
+          setState(() {
+            startingUp = false;
+            if (first != '') {
+              chapterTitle = first;
+              changeChapter();
+              _loading = true;
+            }
+          });
         }
-      });
-      res.items.forEach((itemRef) {
+
+        drawerItems.add(creditTile);
+        drawerItems.add(emailTile);
+      }).onError((error, stackTrace) {});
+    } else {
+      List<FileSystemEntity> subs = directory
+          .listSync()
+          .where((element) => element is Directory)
+          .toList();
+      if (subs.length > 0) {
+        first = getLocalDirName(subs.first);
+      }
+
+      subs.forEach((itemRef) {
         drawerItems.add(ListTile(
-          title: Text(itemRef.name),
+          title: Text(getLocalDirNameFancy(itemRef)),
           onTap: () => {
+            print('tapped'),
             setState(() => {
-                  tiled = false,
-                  print('turning off tiled'),
-                  initImage(itemRef.fullPath),
+                  chapterTitle = getLocalDirName(itemRef),
+                  changeChapter(),
                   _loading = true,
                 }),
             Navigator.pop(context),
@@ -652,10 +752,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           }
         });
       }
-      ;
+      drawerItems.add(updateTile);
       drawerItems.add(creditTile);
       drawerItems.add(emailTile);
-    }).onError((error, stackTrace) {});
+    }
+    setState(() {});
+  }
+
+  checkForUpdates() async {
+    try {
+      setState(() {
+        drawerItems = [SpinKitChasingDots(color: Colors.purple)];
+      });
+      var listRef = storage.ref().child('/');
+      String first = '';
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      final res = await listRef.listAll();
+      List<firebase_storage.Reference> asdf = res.items;
+      for (var itemRef in asdf) {
+        await updateMobileData(itemRef, prefs);
+      }
+      print('should be DONE checking');
+      updateDrawer();
+    } on Exception catch (e) {
+      print(e);
+    }
   }
 
   IconData infoIcon = Icons.info;
@@ -812,7 +933,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     activeMarkerColorList =
         List.generate(activeMarkerColorList.length, (index) => BoxDecoration());
     fullListMarkers.asMap().forEach((key, value) {
-      if (value.replaceAll('_', ' ').contains(pictureName)) {
+      if (value
+          .replaceAll('_', ' ')
+          .toUpperCase()
+          .contains(pictureName.toUpperCase())) {
         activeMarkerColorList[key] = markerOnBox;
       }
     });
@@ -876,6 +1000,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
   }
 
+  String fancyCapitalize(String input) {
+    return input
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((e) => e.capitalize())
+        .toList()
+        .join(' ');
+  }
+
   Widget textScreen([bool bottom = false]) {
     return Stack(
       children: [
@@ -884,7 +1017,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           Container(
             padding: EdgeInsets.all(30),
             child: Text(
-              chapterTitle,
+              fancyCapitalize(chapterTitle),
               style: TextStyle(fontSize: 30),
             ),
           ),
@@ -966,7 +1099,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             onInteractionUpdate: (details) {
               if (_transformationController.value[0] > 2) {
                 if (!zoomed) {
-                  print('zoomed' + tiled.toString());
+                  print('zoomed');
                   zoomed = true;
                   build(() {});
                 }
@@ -1327,5 +1460,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ],
       ),
     );
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    if (this.length < 1) {
+      return this;
+    }
+    return "${this[0].toUpperCase()}${this.substring(1)}";
   }
 }
