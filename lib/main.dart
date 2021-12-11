@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 // import 'dart:html' as html;
 import "package:universal_html/html.dart" as html;
@@ -25,6 +26,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mailto/mailto.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,6 +72,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       directory = await getApplicationDocumentsDirectory();
     }
     updateDrawer();
+    if (!kIsWeb) {
+      Future.delayed(Duration(seconds: 2), () {
+        Fluttertoast.showToast(
+            msg: "Checking for Updates...",
+            toastLength: Toast.LENGTH_LONG,
+            gravity: ToastGravity.BOTTOM,
+            timeInSecForIosWeb: 1,
+            backgroundColor: Colors.pinkAccent,
+            textColor: Colors.white,
+            fontSize: 16.0);
+
+        checkForUpdates();
+      });
+    }
   }
 
   clearEVERYTHING() {
@@ -262,6 +278,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   ];
   late Directory directory;
 
+  updateMobileData(
+    firebase_storage.Reference itemRef,
+    SharedPreferences prefs,
+  ) async {
+    final res = await itemRef.listAll();
+    List<firebase_storage.Reference> asdf = res.items;
+
+    for (var element in asdf) {
+      if (scafKey.currentState != null) {
+        if (scafKey.currentState!.isDrawerOpen) {
+          try {
+            downUpdate(() {
+              updateStatus = 'checking ' + element.fullPath;
+            });
+          } on Exception catch (e) {
+            print(e);
+          }
+        }
+      }
+
+      await checkingAsync(element, prefs);
+    }
+  }
+
   checkingAsync(
       firebase_storage.Reference element, SharedPreferences prefs) async {
     final f = await element.getMetadata();
@@ -269,7 +309,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     String b;
     File file = File(remoteToLocal(element.fullPath));
     if (await file.exists()) {
-      final test = prefs.getString(remoteToLocal(element.fullPath));
+      final test = prefs.getString(element.fullPath);
       if (test != null) {
         b = test;
       } else {
@@ -285,28 +325,56 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     if (a != null && b != null) {
       if (a != b) {
-        await downloadMobile(element, prefs, a);
+        await addQueue(element, a);
       }
     } else {
       if (a != null) {
-        await downloadMobile(element, prefs, a);
+        await addQueue(element, a);
       }
     }
   }
 
-  updateMobileData(
-      firebase_storage.Reference itemRef, SharedPreferences prefs) async {
-    final res = await itemRef.listAll();
-    List<firebase_storage.Reference> asdf = res.items;
-
-    for (var element in asdf) {
-      await checkingAsync(element, prefs);
-    }
+  bool updates = false;
+  addQueue(firebase_storage.Reference itemRef, String lastUpdate) {
+    updates = true;
+    references.add(itemRef);
+    lastUpdates.add(lastUpdate);
+    print('queue');
   }
+
+  int key = 0;
+  int deleteKey = 0;
+  downloadAll() async {
+    doneDownload = false;
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    key = 0;
+    for (firebase_storage.Reference value in references) {
+      await downloadMobile(value, prefs, lastUpdates[key]);
+      updateDownloadGlobal(() {
+        key++;
+      });
+    }
+    deleteKey = 0;
+    for (var delete in toDelete) {
+      print('DELETING File: ' + delete.path);
+      delete.deleteSync();
+      deleteKey++;
+    }
+    doneDownload = true;
+    startingUp = true;
+    updateDrawer();
+    Navigator.of(context).pop();
+  }
+
+  List<firebase_storage.Reference> references = [];
+  List<String> lastUpdates = [];
 
   downloadMobile(firebase_storage.Reference itemRef, SharedPreferences prefs,
       String lastUpdate) async {
     print('updating... ' + itemRef.fullPath);
+
+    updateStatus = 'updating... ' + itemRef.fullPath;
+
     File file = File(remoteToLocal(itemRef.fullPath));
 
     final Uint8List? a = await itemRef.getData();
@@ -317,11 +385,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       Directory check = Directory(ff.substring(0, ff.lastIndexOf('/')));
       if (await check.exists()) {
       } else {
-        check.create();
+        await check.create();
       }
       await file.writeAsBytes(a);
-      prefs.setString(remoteToLocal(itemRef.fullPath), lastUpdate);
+      prefs.setString(itemRef.fullPath, lastUpdate);
       print('updated ' + itemRef.fullPath);
+
+      updateStatus = 'updated ' + itemRef.fullPath;
     }
   }
 
@@ -555,19 +625,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       } else {
         print('ERROR directory not found!');
       }
-      print('found locally: ' + fileInFolder.toString());
-      directory.list().forEach((element) {
-        print(element.path);
-      });
+      // print('found locally: ' + fileInFolder.toString());
+      // directory.list().forEach((element) {
+      //   print(element.path);
+      // });
     } else {
       print('not on mobile, using web retreaval...');
-      var listRef = storage.ref().child('/' + chapterTitle);
-      listRef.listAll().then((res) => {
-            res.items.forEach((element) {
-              fileInFolder.add(element.fullPath);
-            })
-          });
-      print('found remotely ' + fileInFolder.toString());
+      var listRef = storage.ref().child(chapterTitle);
+      final res = await listRef.listAll();
+      print(res);
+      for (firebase_storage.Reference element in res.items) {
+        print(element.fullPath);
+        fileInFolder.add(element.fullPath);
+      }
+
+      print('found remotely ' +
+          fileInFolder.toString() +
+          ' for chapter ' +
+          chapterTitle);
     }
 
     bool firstImage = false;
@@ -752,31 +827,157 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           }
         });
       }
-      drawerItems.add(updateTile);
+
       drawerItems.add(creditTile);
       drawerItems.add(emailTile);
+      drawerItems.add(updateTile);
     }
     setState(() {});
   }
 
+  String updateStatus = 'checking for updates';
+  List<FileSystemEntity> toDelete = [];
+  late StateSetter downUpdate;
   checkForUpdates() async {
+    references = [];
+    lastUpdates = [];
+    updates = false;
     try {
       setState(() {
-        drawerItems = [SpinKitChasingDots(color: Colors.purple)];
+        updateTile = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SpinKitChasingDots(color: Colors.purple),
+            Expanded(
+              child: StatefulBuilder(
+                builder: (thisLowerContext, innerSetState) {
+                  downUpdate = innerSetState;
+                  print('updating ' + updateStatus);
+                  return Text(
+                    updateStatus,
+                    overflow: TextOverflow.fade,
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+        updateDrawer();
       });
+
       var listRef = storage.ref().child('/');
       String first = '';
       SharedPreferences prefs = await SharedPreferences.getInstance();
       final res = await listRef.listAll();
-      List<firebase_storage.Reference> asdf = res.items;
+
+      List<firebase_storage.Reference> asdf = res.prefixes;
+      print('checking ' + asdf.toString());
+
+      List<String> checkPaths = [];
       for (var itemRef in asdf) {
         await updateMobileData(itemRef, prefs);
-      }
+        final aaa = await itemRef.listAll();
+        final bb = await aaa.items;
+        for (var item in bb) {
+          checkPaths.add(remoteToLocal(item.fullPath));
+        }
+      } //--------
+
+      toDelete = [];
+      List<FileSystemEntity> subs = directory
+          .listSync()
+          .where((element) => element is Directory)
+          .toList();
+
+      subs.forEach((itemRef) {
+        Directory(itemRef.path).listSync().forEach((rr) {
+          if (!checkPaths.contains(rr.path)) {
+            print("to delete: " + rr.path);
+            updates = true;
+            toDelete.add(rr);
+          }
+        });
+      });
+      print('To DELETE: ' + toDelete.toString());
+//--------
       print('should be DONE checking');
+      updateTile = ListTile(
+        onTap: checkForUpdates,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Check for Updates'),
+            Icon(
+              Icons.cloud_download,
+              color: Colors.deepPurple,
+            )
+          ],
+        ),
+      );
+      if (updates) {
+        askToDownload();
+      }
       updateDrawer();
     } on Exception catch (e) {
       print(e);
     }
+  }
+
+  late StateSetter updateDownloadGlobal;
+  bool doneDownload = true;
+  askToDownload() {
+    showDialog(
+        context: context,
+        barrierDismissible: doneDownload,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Updates READY!'),
+            content: StatefulBuilder(
+                builder: (BuildContext context, StateSetter updateDownload) {
+              updateDownloadGlobal = updateDownload;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('There are ' +
+                      references.length.toString() +
+                      ' downloads ready'),
+                  Container(height: 20),
+                  Text('There are ' +
+                      toDelete.length.toString() +
+                      ' files to delete'),
+                  Container(height: 20),
+                  LinearProgressIndicator(
+                      value: (key + deleteKey) /
+                          (references.length + toDelete.length))
+                ],
+              );
+            }),
+            actions: [
+              OutlinedButton(
+                onPressed: downloadAll,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Sync ',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    Icon(Icons.sync, color: Colors.white)
+                  ],
+                ),
+                style: ButtonStyle(
+                  backgroundColor:
+                      MaterialStateProperty.all<Color>(Colors.purple),
+                  shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+                    RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18.0),
+                        side: BorderSide(color: Colors.purple)),
+                  ),
+                ),
+              ),
+            ],
+          );
+        });
   }
 
   IconData infoIcon = Icons.info;
@@ -858,15 +1059,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         '***');
   }
 
-  goToMarker(String where) {
+  goToMarker(String where) async {
     if (!showViewer) {
       print('opening viewer');
       toggleViewer();
+      await Future.delayed(Duration(seconds: 1));
       print('done');
     }
 
     List<String> whereSplit = where.split(',');
-    print(whereSplit);
+    // print(whereSplit);
     String targetImageName = whereSplit[0];
 
     double zoom = double.parse(whereSplit[1]);
@@ -884,41 +1086,43 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       initImage(targetImageFullPath);
     }
 
-    print(viewerKey.currentContext!.size);
-    double w = viewerKey.currentContext!.size!.width;
-    double h = viewerKey.currentContext!.size!.height;
-    double min = 0;
-    if (w > h) {
-      min = w;
-    } else {
-      min = h;
+    // print(viewerKey.currentContext!.size);
+    if (viewerKey.currentContext != null) {
+      double w = viewerKey.currentContext!.size!.width;
+      double h = viewerKey.currentContext!.size!.height;
+      double min = 0;
+      if (w > h) {
+        min = w;
+      } else {
+        min = h;
+      }
+      setState(() {
+        print('changing decoration at: ' +
+            fullListMarkers.indexOf(where).toString());
+        coolColor = Colors.blue;
+        hideAllMarkers();
+        activeMarkerColorList[fullListMarkers.indexOf(where)] = markerOnBox;
+        showingMarker = true;
+      });
+      animateTo(Matrix4.fromList([
+        zoom,
+        0,
+        0,
+        0,
+        0,
+        zoom,
+        0,
+        0,
+        0,
+        0,
+        zoom,
+        0,
+        -zoom * x * (min),
+        -zoom * y * (min),
+        0,
+        1
+      ]));
     }
-    setState(() {
-      print('changing decoration at: ' +
-          fullListMarkers.indexOf(where).toString());
-      coolColor = Colors.blue;
-      hideAllMarkers();
-      activeMarkerColorList[fullListMarkers.indexOf(where)] = markerOnBox;
-      showingMarker = true;
-    });
-    animateTo(Matrix4.fromList([
-      zoom,
-      0,
-      0,
-      0,
-      0,
-      zoom,
-      0,
-      0,
-      0,
-      0,
-      zoom,
-      0,
-      -zoom * x * (min),
-      -zoom * y * (min),
-      0,
-      1
-    ]));
   }
 
   hideAllMarkers() {
@@ -965,7 +1169,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     int rack = 0;
     fullListMarkers.forEach((where) {
       List<String> whereSplit = where.split(',');
-      print(whereSplit);
+      // print('updating markers..' + whereSplit.toString());
       double zoom = double.parse(whereSplit[1]);
       double x = double.parse(whereSplit[2]);
       double y = double.parse(whereSplit[3]);
@@ -1010,6 +1214,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget textScreen([bool bottom = false]) {
+    if (textBits.length < 1) {
+      return Center(
+        child: Text("Select a chapter to get started!"),
+      );
+    }
     return Stack(
       children: [
         SingleChildScrollView(
@@ -1127,7 +1336,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ),
       ),
     );
-    Widget loadingW = _loading ? loadingWidget : Container();
+
     List<Widget> navigator = [];
     Widget pictureNav = Container();
     if (chapterImages.length > 0) {
@@ -1206,7 +1415,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           ),
         ),
       );
+    } else {
+      _loading = false;
+      pictureNav = Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(
+          'no images for this chapter',
+          textAlign: TextAlign.center,
+        ),
+      ]);
+      _image = Image.asset("assets/none.png");
     }
+
+    Widget loadingW = _loading ? loadingWidget : Container();
 
     if (top) {
       return Stack(
@@ -1356,6 +1576,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   GlobalKey<ScaffoldState> scafKey = GlobalKey<ScaffoldState>();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1397,7 +1618,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             Icons.menu_book_outlined,
           ),
           tooltip: 'Chapters',
-          onPressed: () => {scafKey.currentState!.openDrawer()},
+          onPressed: () => {
+            scafKey.currentState!.openDrawer(),
+          },
         ),
         actions: [Container()],
       ),
