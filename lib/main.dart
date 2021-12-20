@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
-// import 'dart:html' as html;
 import "package:universal_html/html.dart" as html;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io' as io;
@@ -1254,28 +1252,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               mainAxisAlignment:
                   bottom ? MainAxisAlignment.start : MainAxisAlignment.end,
               children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple,
-                    borderRadius: bottom
-                        ? BorderRadius.only(bottomLeft: Radius.circular(15))
-                        : BorderRadius.only(topLeft: Radius.circular(15)),
-                  ),
-                  child: IconButton(
-                    tooltip: !showViewer ? 'Show Viewer' : 'Hide Viewer',
-                    icon: Icon(
-                      !showViewer
-                          ? Icons.pageview_rounded
-                          : bottom
-                              ? Icons.keyboard_arrow_up_outlined
-                              : Icons.chevron_right,
-                      color: Colors.white,
-                    ),
-                    onPressed: () {
-                      toggleViewer();
-                    },
-                  ),
-                ),
+                popUp
+                    ? Container()
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple,
+                          borderRadius: bottom
+                              ? BorderRadius.only(
+                                  bottomLeft: Radius.circular(15))
+                              : BorderRadius.only(topLeft: Radius.circular(15)),
+                        ),
+                        child: IconButton(
+                          tooltip: !showViewer ? 'Show Viewer' : 'Hide Viewer',
+                          icon: Icon(
+                            !showViewer
+                                ? Icons.pageview_rounded
+                                : bottom
+                                    ? Icons.keyboard_arrow_up_outlined
+                                    : Icons.chevron_right,
+                            color: Colors.white,
+                          ),
+                          onPressed: () {
+                            toggleViewer();
+                          },
+                        ),
+                      ),
               ],
             ),
           ],
@@ -1286,7 +1287,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   bool zoomed = false;
   List<Widget> markers = [];
-  Widget viewer([bool top = false]) {
+  Widget viewer([bool top = false, bool drag = false]) {
     updateMarkers();
     if (!showViewer) {
       return Container();
@@ -1294,8 +1295,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     Widget viewBuilder = StatefulBuilder(
       builder: (BuildContext context, StateSetter build) => Center(
         child: Container(
-          decoration:
-              BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
+          decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: Colors.black, width: 2)),
           child: InteractiveViewer(
             key: viewerKey,
             panEnabled: true, // Set it to false to prevent panning.
@@ -1339,112 +1341,122 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     List<Widget> navigator = [];
     Widget pictureNav = Container();
-    if (chapterImages.length > 0) {
-      List<Widget> picThumbs = chapterImages
-          .map((e) => Container(
-                padding: const EdgeInsets.all(8.0),
-                child: Tooltip(
-                  message: trimUrlToName(e),
-                  child: GestureDetector(
-                      onTap: () {
-                        initImage(e);
-                      },
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        color: Colors.lightBlue,
-                      )),
-                ),
-              ))
-          .toList();
-      int index = chapterImages.indexOf(currentImagePath);
-      picThumbs[index] = Container(
-          padding: EdgeInsets.all(10),
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15), color: Colors.lightBlue),
-          child: Text(
-            pictureName,
-            style: TextStyle(color: Colors.white),
-          ));
-      navigator = [
-        IconButton(
-          onPressed: () => {
-            previousImage(),
-          },
-          tooltip: "Previous Image",
-          icon: Icon(
-            Icons.arrow_left,
-            color: Colors.lightBlue,
+    if (!drag) {
+      if (chapterImages.length > 0) {
+        List<Widget> picThumbs = chapterImages
+            .map((e) => Container(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Tooltip(
+                    message: trimUrlToName(e),
+                    child: GestureDetector(
+                        onTap: () {
+                          initImage(e);
+                        },
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          color: Colors.lightBlue,
+                        )),
+                  ),
+                ))
+            .toList();
+        int index = chapterImages.indexOf(currentImagePath);
+        picThumbs[index] = Container(
+            padding: EdgeInsets.all(10),
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                color: Colors.lightBlue),
+            child: Text(
+              pictureName,
+              style: TextStyle(color: Colors.white),
+            ));
+        navigator = [
+          IconButton(
+            onPressed: () => {
+              previousImage(),
+            },
+            tooltip: "Previous Image",
+            icon: Icon(
+              Icons.arrow_left,
+              color: Colors.lightBlue,
+            ),
           ),
-        ),
-        ...picThumbs,
-        IconButton(
-          onPressed: () => {
-            nextImage(),
-          },
-          tooltip: "Next Image",
-          icon: Icon(
-            Icons.arrow_right,
-            color: Colors.lightBlue,
+          ...picThumbs,
+          IconButton(
+            onPressed: () => {
+              nextImage(),
+            },
+            tooltip: "Next Image",
+            icon: Icon(
+              Icons.arrow_right,
+              color: Colors.lightBlue,
+            ),
           ),
-        ),
-        PopupMenuButton(
-          tooltip: 'Browse Images',
-          child: Icon(
-            Icons.image_search,
-            color: Colors.lightBlue,
+          PopupMenuButton(
+            tooltip: 'Browse Images',
+            child: Icon(
+              Icons.image_search,
+              color: Colors.lightBlue,
+            ),
+            onSelected: (value) {
+              initImage(value as String);
+            },
+            itemBuilder: (BuildContext context) {
+              return chapterImages
+                  .map((e) => PopupMenuItem<String>(
+                        child: Text(trimUrlToName(e)),
+                        value: e,
+                      ))
+                  .toList();
+            },
+          )
+        ];
+        pictureNav = Container(
+          alignment: Alignment.topRight,
+          child: FittedBox(
+            child: Row(
+              children: navigator,
+            ),
           ),
-          onSelected: (value) {
-            initImage(value as String);
-          },
-          itemBuilder: (BuildContext context) {
-            return chapterImages
-                .map((e) => PopupMenuItem<String>(
-                      child: Text(trimUrlToName(e)),
-                      value: e,
-                    ))
-                .toList();
-          },
-        )
-      ];
-      pictureNav = Container(
-        alignment: Alignment.topRight,
-        child: FittedBox(
-          child: Row(
-            children: navigator,
+        );
+      } else {
+        _loading = false;
+        pictureNav =
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(
+            'no images for this chapter',
+            textAlign: TextAlign.center,
           ),
-        ),
-      );
-    } else {
-      _loading = false;
-      pictureNav = Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(
-          'no images for this chapter',
-          textAlign: TextAlign.center,
-        ),
-      ]);
-      _image = Image.asset("assets/none.png");
+        ]);
+        _image = Image.asset("assets/none.png");
+      }
     }
 
     Widget loadingW = _loading ? loadingWidget : Container();
 
     if (top) {
-      return Stack(
+      return Container(
+        color: Colors.white,
+        child: Stack(
+          children: [
+            viewBuilder,
+            loadingW,
+            pictureNav,
+            Positioned(bottom: 0, right: 0, child: viewerTools()),
+          ],
+        ),
+      );
+    }
+    return Container(
+      color: Colors.white,
+      child: Stack(
         children: [
           viewBuilder,
           loadingW,
           pictureNav,
           Positioned(bottom: 0, right: 0, child: viewerTools()),
         ],
-      );
-    }
-    return Stack(
-      children: [
-        viewBuilder,
-        loadingW,
-        pictureNav,
-        Positioned(bottom: 0, right: 0, child: viewerTools()),
-      ],
+      ),
     );
   }
 
@@ -1493,6 +1505,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                popUp
+                    ? Container()
+                    : FloatingActionButton(
+                        onPressed: () {
+                          setState(() {
+                            popUp = !popUp;
+                          });
+                        },
+                        tooltip: "Popup",
+                        child: Icon(Icons.arrow_upward),
+                      ),
+                Container(width: 10),
                 FloatingActionButton(
                   onPressed: () => {
                     showingMarker
@@ -1510,7 +1534,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ),
                 Container(width: 10),
                 FloatingActionButton(
-                  onPressed: () => {printMarker(), _animateResetInitialize()},
+                  onPressed: () {
+                    printMarker();
+                    _animateResetInitialize();
+                  },
                   tooltip: 'Reset Zoom',
                   child: Icon(Icons.fullscreen),
                 ),
@@ -1522,7 +1549,116 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  bool popUp = true;
+  bool dragging = false;
+  bool left = true;
+  bool top = true;
+  Offset releaseOffset = Offset(0, 0);
+  double popPadding = 10;
+  Widget popUpWidget() {
+    if (!popUp) {
+      return Container();
+    }
+    Widget pop = Container(
+      width: 400,
+      height: 420,
+      child: Column(
+          mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 20,
+              child: Draggable<Color>(
+                  child: Container(
+                    child: Row(
+                      children: [
+                        FittedBox(
+                          child: IconButton(
+                            icon: Icon(Icons.close),
+                            tooltip: 'Dock',
+                            onPressed: () {
+                              setState(() {
+                                popUp = false;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    decoration: BoxDecoration(
+                        color: dragging ? Colors.transparent : Colors.white,
+                        border: dragging
+                            ? null
+                            : Border.all(color: Colors.black, width: 2),
+                        borderRadius: BorderRadius.circular(5)),
+                  ),
+                  onDragStarted: () {
+                    setState(() {
+                      dragging = true;
+                    });
+                  },
+                  onDragEnd: (details) {
+                    releaseOffset = details.offset;
+                    final x = details.offset.dx + 200;
+                    final y = details.offset.dy + 210;
+                    final fullx = MediaQuery.of(context).size.width;
+                    final fully = MediaQuery.of(context).size.height;
+
+                    if (x > fullx / 2) {
+                      left = false;
+                    } else {
+                      left = true;
+                    }
+
+                    if (y > fully / 2) {
+                      top = false;
+                    } else {
+                      top = true;
+                    }
+
+                    setState(() {
+                      print(details.offset.dx);
+                      dragging = false;
+                    });
+                  },
+                  feedback: Container(
+                      width: 400,
+                      height: 420,
+                      child: Column(mainAxisSize: MainAxisSize.max, children: [
+                        Container(
+                          height: 20,
+                          decoration: BoxDecoration(
+                              color: Colors.purple,
+                              border: Border.all(color: Colors.black, width: 2),
+                              borderRadius: BorderRadius.circular(5)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.max,
+                          ),
+                        ),
+                        Expanded(child: viewer(true, true))
+                      ]))),
+            ),
+            Expanded(
+              child: dragging ? Container() : viewer(),
+            )
+          ]),
+    );
+
+    return AnimatedPositioned(
+        duration: Duration(milliseconds: 300),
+        // top: releaseOffset.dy - MediaQuery.of(context).viewInsets.top,
+        // left: releaseOffset.dx,
+        bottom: top ? null : popPadding,
+        top: top ? popPadding : null,
+        left: left ? popPadding : null,
+        right: left ? null : popPadding,
+        child: pop);
+  }
+
   Widget rowOrColumn() {
+    if (popUp) {
+      return textScreen(true);
+    }
     if (MediaQuery.of(context).size.height >
         MediaQuery.of(context).size.width) {
       return Column(
@@ -1641,46 +1777,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         child: creditWidget,
       ),
       body: Stack(
-        children: [
-          rowOrColumn(),
-          Stack(
-            children: [
-              magUp
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                              child: Container(
-                                color: Colors.black38,
-                              ),
-                              onTap: () {
-                                if (magUp) {
-                                  magW = 0;
-                                  magH = 0;
-                                  magDecoration = BoxDecoration();
-                                  print('dismissing mag');
-                                  setState(() {});
-                                }
-                                magUp = false;
-                              }),
-                        )
-                      ],
-                    )
-                  : Container(),
-              Positioned(
-                bottom: tapdy,
-                left: tapdx,
-                child: AnimatedContainer(
-                  width: magW,
-                  height: magH,
-                  decoration: magDecoration,
-                  duration: Duration(milliseconds: 300),
-                  child: Center(child: Text("I'm a zoomed in image")),
-                ),
-              ),
-            ],
-          ),
-        ],
+        children: [rowOrColumn(), popUpWidget()],
       ),
     );
   }
