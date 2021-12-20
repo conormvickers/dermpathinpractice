@@ -342,7 +342,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   int key = 0;
   int deleteKey = 0;
+  bool downloadPressed = false;
   downloadAll() async {
+    if (downloadPressed) {
+      return;
+    }
+    downloadPressed = true;
     doneDownload = false;
     SharedPreferences prefs = await SharedPreferences.getInstance();
     key = 0;
@@ -952,7 +957,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             }),
             actions: [
               OutlinedButton(
-                onPressed: downloadAll,
+                onPressed: downloadPressed ? null : downloadAll,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1555,13 +1560,23 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   bool top = true;
   Offset releaseOffset = Offset(0, 0);
   double popPadding = 10;
+  double windowSize = 400;
   Widget popUpWidget() {
     if (!popUp) {
       return Container();
     }
+    Size a = MediaQuery.of(context).size;
+    double temp = a.width;
+    if (a.height < a.width) {
+      temp = a.height;
+    }
+    windowSize = temp * 2 / 3;
+    if (windowSize > 400) {
+      windowSize == 400;
+    }
     Widget pop = Container(
-      width: 400,
-      height: 420,
+      width: windowSize,
+      height: windowSize + 20,
       child: Column(
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1599,8 +1614,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   },
                   onDragEnd: (details) {
                     releaseOffset = details.offset;
-                    final x = details.offset.dx + 200;
-                    final y = details.offset.dy + 210;
+                    final x = details.offset.dx + (windowSize / 2);
+                    final y = details.offset.dy + (windowSize / 2) + 10;
                     final fullx = MediaQuery.of(context).size.width;
                     final fully = MediaQuery.of(context).size.height;
 
@@ -1622,8 +1637,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     });
                   },
                   feedback: Container(
-                      width: 400,
-                      height: 420,
+                      width: windowSize,
+                      height: windowSize + 20,
                       child: Column(mainAxisSize: MainAxisSize.max, children: [
                         Container(
                           height: 20,
